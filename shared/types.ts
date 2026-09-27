@@ -13,7 +13,7 @@ export interface AbsenceTypeInfo {
 }
 
 export const ABSENCE_TYPES: Record<AbsenceType, AbsenceTypeInfo> = {
-  vacaciones: { label: 'Vacaciones', short: 'V', color: '#0ea5a4', countsAgainstBalance: true },
+  vacaciones: { label: 'Vacaciones', short: 'V', color: '#2563eb', countsAgainstBalance: true },
   asuntos_propios: { label: 'Asuntos propios', short: 'AP', color: '#8b5cf6', countsAgainstBalance: false },
   baja: { label: 'Baja', short: 'B', color: '#ef4444', countsAgainstBalance: false },
   formacion: { label: 'Formación', short: 'F', color: '#f59e0b', countsAgainstBalance: false },

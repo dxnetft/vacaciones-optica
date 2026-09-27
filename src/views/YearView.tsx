@@ -138,8 +138,13 @@ export function YearView({ year, onYear, onOpenMonth }: { year: number; onYear: 
                     style = { background: ABSENCE_TYPES[entry.absence.type].color, color: 'white' };
                     if (entry.absence.status === 'pendiente') cls += ' pending';
                   } else if (n) {
-                    const alpha = 0.18 + 0.72 * (n / max);
-                    style = { background: `rgba(15, 118, 110, ${alpha.toFixed(2)})`, color: alpha > 0.5 ? 'white' : undefined };
+                    // Escala de marca: amarillo claro → amarillo → amarillo tostado oscuro.
+                    const r = n / max;
+                    const background =
+                      r <= 0.5
+                        ? `color-mix(in srgb, var(--brand) ${Math.round(30 + 140 * r)}%, transparent)`
+                        : `color-mix(in srgb, #9a3412 ${Math.round(160 * (r - 0.5))}%, var(--brand))`;
+                    style = { background, color: r > 0.75 ? 'white' : 'var(--on-brand)' };
                     if (!entry!.approved.length) cls += ' pending';
                   }
                   const tip = [

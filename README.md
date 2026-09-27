@@ -22,7 +22,9 @@ empezar a usarse importando ese mismo Excel tal cual**, sin tener que rehacer na
 - **Festivos**: los nacionales se añaden con un clic; los autonómicos y locales, a mano.
 - **Exportar a Excel**: resumen de saldos, listado y un cuadrante por mes con colores.
 - **Copias de seguridad**: una copia automática al día y descarga o restauración manual.
-- Se puede usar desde el móvil.
+- Se puede usar desde el móvil y tiene modo oscuro automático.
+- Colores de la marca (amarillo y gris antracita). Se cambian en las variables `--brand`
+  del principio de `src/styles.css`.
 
 ## Importar el Excel actual
 

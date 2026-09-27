@@ -31,8 +31,8 @@ export async function exportYear(state: DataState, year: number): Promise<Buffer
   const emps = sortedEmployees(state);
   const byEmp = absencesByEmployee(state.absences);
   const header = (row: ExcelJS.Row) => {
-    row.font = { bold: true, color: { argb: 'FFFFFFFF' } };
-    row.eachCell((c) => (c.fill = solid('#0f766e')));
+    row.font = { bold: true, color: { argb: 'FF1D1D1B' } };
+    row.eachCell((c) => (c.fill = solid('#ffcd00')));
   };
 
   // Resumen

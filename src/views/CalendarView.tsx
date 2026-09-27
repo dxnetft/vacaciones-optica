@@ -123,7 +123,7 @@ export function CalendarView({ year, month, onChange }: { year: number; month: n
 
       <div className="kpis">
         <div className="kpi">
-          <span className="kpi-icon" style={{ background: 'var(--teal-soft)', color: 'var(--teal)' }}>
+          <span className="kpi-icon" style={{ background: 'var(--brand-soft)', color: 'var(--accent)' }}>
             <Icon name="sun" />
           </span>
           <div>
