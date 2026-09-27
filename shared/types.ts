@@ -28,10 +28,46 @@ export const STATUS_LABELS: Record<AbsenceStatus, string> = {
   rechazada: 'Rechazada',
 };
 
+/** Turno de un día: mañana, tarde o partido (mañana y tarde). */
+export type Shift = 'M' | 'T' | 'P';
+
+export const SHIFTS: Record<Shift, { label: string; short: string }> = {
+  M: { label: 'Mañana', short: 'M' },
+  T: { label: 'Tarde', short: 'T' },
+  P: { label: 'Partido', short: 'P' },
+};
+
+export const SHIFT_KEYS = Object.keys(SHIFTS) as Shift[];
+
+/** Un horario semanal que se puede asignar a varias personas (p. ej. "Mañana", "Tarde", "Sábados"). */
+export interface ScheduleGroup {
+  id: string;
+  name: string;
+  /** Turno de cada día de la semana (0 = domingo … 6 = sábado). `null` = ese día no trabaja. */
+  days: (Shift | null)[];
+}
+
+/**
+ * Horario de una persona: siempre el mismo o rotativo (va pasando por varios horarios,
+ * cambiando cada `everyWeeks` semanas).
+ */
+export type EmployeeSchedule =
+  | { kind: 'fijo'; groupId: string }
+  | {
+      kind: 'rotativo';
+      groupIds: string[];
+      /** Un lunes en el que empieza el primer horario de la lista. */
+      start: ISODate;
+      everyWeeks: number;
+    };
+
 export interface Store {
   id: string;
   name: string;
-  /** Personas mínimas que deben estar trabajando cada día laborable. 0 = sin mínimo. */
+  /**
+   * Personas mínimas que deben estar trabajando cada día laborable. Si el equipo tiene turnos,
+   * el mínimo se aplica a la mañana y a la tarde por separado. 0 = sin mínimo.
+   */
   minStaff: number;
 }
 
@@ -43,6 +79,8 @@ export interface Employee {
   /** Días de vacaciones al año. `null` = usar el valor por defecto de ajustes. */
   annualDays: number | null;
   active: boolean;
+  /** `null` o ausente = sin horario: trabaja los días laborables generales de Ajustes. */
+  schedule?: EmployeeSchedule | null;
 }
 
 export interface Absence {
@@ -70,7 +108,11 @@ export interface Settings {
   /** Días de la semana que se trabajan (0 = domingo … 6 = sábado). */
   workingWeekdays: number[];
   defaultAnnualDays: number;
+  /** Cuántos de los días de vacaciones pueden ser sábado cada año. 0 = sin límite. */
+  maxVacationSaturdays: number;
   holidays: Holiday[];
+  /** Horarios que se pueden asignar a las personas del equipo. */
+  scheduleGroups: ScheduleGroup[];
 }
 
 export interface DataState {

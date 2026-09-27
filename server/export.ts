@@ -1,8 +1,9 @@
 import ExcelJS from 'exceljs';
 import { ABSENCE_TYPES, STATUS_LABELS } from '../shared/types.ts';
 import type { DataState } from '../shared/types.ts';
-import { MONTHS_ES, WEEKDAYS_SHORT, clampRange, countDays, dayRules, isWorkingDay, monthDays, overlaps, toDate } from '../shared/dates.ts';
-import { absenceOn, absencesByEmployee, balanceFor } from '../shared/stats.ts';
+import { MONTHS_ES, WEEKDAYS_SHORT, clampRange, dayRules, isWorkingDay, monthDays, overlaps, toDate } from '../shared/dates.ts';
+import { absenceOn, absencesByEmployee, balanceFor, countDaysFor } from '../shared/stats.ts';
+import { describeSchedule } from '../shared/schedule.ts';
 
 const argb = (hex: string) => `FF${hex.replace('#', '').toUpperCase()}`;
 const solid = (hex: string): ExcelJS.Fill => ({ type: 'pattern', pattern: 'solid', fgColor: { argb: argb(hex) } });
@@ -45,11 +46,17 @@ export async function exportYear(state: DataState, year: number): Promise<Buffer
     { header: 'Pendientes de aprobar', width: 22 },
     { header: 'Restantes', width: 12 },
     { header: 'Otras ausencias (días)', width: 22 },
+    { header: 'Sábados de vacaciones', width: 22 },
+    { header: 'Horario', width: 30 },
   ];
   header(sum.getRow(1));
   for (const e of emps) {
     const b = balanceFor(e, year, state, rules);
-    sum.addRow([e.name, e.storeName, b.allowance, b.used, b.pending, b.remaining, b.otherDays]);
+    const sats = b.saturdaysUsed + b.saturdaysPending;
+    sum.addRow([
+      e.name, e.storeName, b.allowance, b.used, b.pending, b.remaining, b.otherDays,
+      b.maxSaturdays ? `${sats} de ${b.maxSaturdays}` : sats, describeSchedule(e, rules) || 'General',
+    ]);
   }
 
   // Listado
@@ -74,7 +81,7 @@ export async function exportYear(state: DataState, year: number): Promise<Buffer
     const r = clampRange(a.start, a.end, `${year}-01-01`, `${year}-12-31`)!;
     list.addRow([
       e.name, e.storeName, ABSENCE_TYPES[a.type].label, STATUS_LABELS[a.status],
-      toDate(a.start), toDate(a.end), countDays(r[0], r[1], state.settings.countMode, rules), a.note ?? '',
+      toDate(a.start), toDate(a.end), countDaysFor(e, r[0], r[1], state.settings.countMode, rules), a.note ?? '',
     ]);
   }
   list.autoFilter = { from: 'A1', to: 'H1' };

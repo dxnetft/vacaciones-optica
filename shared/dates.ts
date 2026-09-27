@@ -1,4 +1,4 @@
-import type { Holiday, ISODate, Settings } from './types.ts';
+import type { Holiday, ISODate, ScheduleGroup, Settings } from './types.ts';
 
 // Todas las operaciones usan UTC para no depender de la zona horaria del equipo.
 
@@ -112,13 +112,20 @@ export function spanishNationalHolidays(year: number): Holiday[] {
 export interface DayRules {
   workingWeekdays: number[];
   holidays: Set<ISODate>;
+  scheduleGroups: Map<string, ScheduleGroup>;
 }
 
-export function dayRules(settings: Pick<Settings, 'workingWeekdays' | 'holidays'>): DayRules {
+export function dayRules(settings: Pick<Settings, 'workingWeekdays' | 'holidays'> & Partial<Pick<Settings, 'scheduleGroups'>>): DayRules {
   return {
     workingWeekdays: settings.workingWeekdays,
     holidays: new Set(settings.holidays.map((h) => h.date)),
+    scheduleGroups: new Map((settings.scheduleGroups ?? []).map((g) => [g.id, g])),
   };
+}
+
+/** Lunes de la semana de `iso`. */
+export function mondayOf(iso: ISODate): ISODate {
+  return addDays(iso, -((weekday(iso) + 6) % 7));
 }
 
 export function isWorkingDay(iso: ISODate, rules: DayRules): boolean {

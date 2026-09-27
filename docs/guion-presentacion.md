@@ -184,6 +184,30 @@ Enséñalo en este orden:
 
 ---
 
+## 7 bis. Horarios, turnos y sábados (2 minutos)
+
+> *«Esto lo hemos añadido a partir de lo que nos contó el equipo: turnos de mañana, tarde y
+> partido, horarios rotativos y el límite de sábados.»*
+
+1. En **Ajustes → Horarios** enseña los tres horarios que vienen creados:
+   - **Mañana**: de lunes a viernes, con un día de jornada partida; el sábado no se trabaja.
+   - **Tarde**: de lunes a viernes de tarde, y el sábado.
+   - **Sábados**: solo los sábados.
+   > *«Cada día se cambia con un clic, y se pueden crear o duplicar todos los horarios que haga falta.»*
+2. En **Equipo**, edita a una persona y ponle un horario **rotativo** (Tarde ⇄ Mañana).
+   Enseña la **vista previa de las próximas semanas**:
+   > *«Marco qué le toca esta semana y la aplicación calcula sola las siguientes.»*
+3. En el **Calendario**, filtra una tienda:
+   - cada día sale la letra del turno (M, T o P), y los días que no trabaja salen rayados;
+   - la fila de la tienda muestra **dos números: mañana arriba y tarde abajo**. El mínimo se comprueba en cada turno:
+   > *«No basta con que haya 3 personas en la tienda: tiene que haber gente por la mañana y por la tarde.»*
+4. **Sábados:** sin PIN, pide para alguien de tarde una semana de lunes a sábado cuando ya ha gastado sus 2 sábados.
+   Sale el aviso **«Se pasa de los sábados de vacaciones»** y no deja enviarla.
+   > *«La regla de los 21 + 2 la aplica la aplicación sola. Como responsable puedes hacer una excepción.»*
+5. En **Equipo** enseña la columna **Sábados** (por ejemplo, 1/2) y la columna **Horario**.
+
+---
+
 ## 8. Ajustes (1,5 minutos)
 
 **Pantalla:** Ajustes.
@@ -281,6 +305,14 @@ Después **calla y deja que hable**. Apunta todo lo que pida: son las mejoras de
 - [ ] Mapa de calor de todo el año: equipo entero, una tienda o una persona.
 - [ ] Día con más ausencias y días sin cobertura con borde rojo.
 - [ ] Pulsar un mes lleva al calendario.
+
+**Horarios y turnos**
+- [ ] Horarios semanales con turno de mañana, tarde o partido por día, que se pueden crear, duplicar y borrar.
+- [ ] Horario fijo o rotativo por persona (cada 1 o más semanas), con vista previa.
+- [ ] Letra del turno en el calendario y días de descanso rayados.
+- [ ] Cobertura mínima por turno (mañana y tarde).
+- [ ] Las vacaciones solo descuentan los días que a esa persona le toca trabajar.
+- [ ] Límite de sábados de vacaciones al año (2 por defecto): bloquea al empleado y avisa al responsable.
 
 **Equipo**
 - [ ] Saldos por persona y año: gastados, pendientes y restantes.

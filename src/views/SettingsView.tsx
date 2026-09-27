@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react';
-import type { Holiday, Settings } from '../../shared/types.ts';
+import { SHIFTS } from '../../shared/types.ts';
+import type { Holiday, ScheduleGroup, Settings, Shift } from '../../shared/types.ts';
 import { WEEKDAYS_ES, formatDate, spanishNationalHolidays } from '../../shared/dates.ts';
 import { api, download } from '../api.ts';
 import { useApp } from '../context.tsx';
@@ -87,6 +88,21 @@ export function SettingsView() {
                 </select>
               </label>
             </div>
+            <label className="field">
+              <span>Sábados de vacaciones al año (máximo)</span>
+              <input
+                type="number"
+                min={0}
+                max={53}
+                value={form.maxVacationSaturdays}
+                disabled={form.countMode === 'naturales'}
+                onChange={(e) => set('maxVacationSaturdays', Number(e.target.value))}
+              />
+              <small className="muted">
+                Cuántos de los días de vacaciones pueden caer en sábado (p. ej. de 23 días, 2 sábados). Cuando alguien los gasta, ya
+                no puede pedir más sábados ese año; el responsable sí puede hacer excepciones. 0 = sin límite.
+              </small>
+            </label>
             <div className="field">
               <span>Días que se trabaja</span>
               <div className="weekday-toggle">
@@ -105,10 +121,21 @@ export function SettingsView() {
                 })}
               </div>
               <small className="muted">
-                Se usa para contar días laborables y avisar de la cobertura mínima. En óptica suele trabajarse de lunes a sábado.
+                Días que abre la tienda. Se usa para avisar de la cobertura mínima y para contar las vacaciones de quien no tiene
+                horario asignado.
               </small>
             </div>
           </section>
+
+          <ScheduleGroupsCard
+            groups={form.scheduleGroups}
+            onChange={(g) => set('scheduleGroups', g)}
+            inUse={(id) =>
+              state.employees.filter(
+                (e) => e.schedule && (e.schedule.kind === 'fijo' ? e.schedule.groupId === id : e.schedule.groupIds.includes(id)),
+              ).length
+            }
+          />
 
           <section className="card">
             <div className="card-head">
@@ -217,5 +244,95 @@ export function SettingsView() {
       )}
       {pinModal && <PinModal onClose={() => setPinModal(false)} />}
     </div>
+  );
+}
+
+const SHIFT_CYCLE: (Shift | null)[] = [null, 'M', 'T', 'P'];
+
+function ScheduleGroupsCard({
+  groups,
+  onChange,
+  inUse,
+}: {
+  groups: ScheduleGroup[];
+  onChange: (g: ScheduleGroup[]) => void;
+  inUse: (id: string) => number;
+}) {
+  const update = (i: number, g: ScheduleGroup) => onChange(groups.map((x, j) => (j === i ? g : x)));
+  const newId = () => `h-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+  const remove = (g: ScheduleGroup) => {
+    const n = inUse(g.id);
+    const msg = n
+      ? `${n} ${n === 1 ? 'persona tiene' : 'personas tienen'} el horario "${g.name}". Si lo borras, pasarán a usar el resto de su rotación o los días generales. ¿Borrarlo?`
+      : `¿Borrar el horario "${g.name}"?`;
+    if (confirm(msg)) onChange(groups.filter((x) => x.id !== g.id));
+  };
+  return (
+    <section className="card">
+      <div className="card-head">
+        <h3>Horarios</h3>
+        <button className="small-btn" onClick={() => onChange([...groups, { id: newId(), name: 'Nuevo horario', days: [null, 'M', 'M', 'M', 'M', 'M', null] }])}>
+          <Icon name="plus" /> Añadir horario
+        </button>
+      </div>
+      <p className="muted small">
+        Define los horarios de la tienda y asígnalos a cada persona en <b>Equipo</b> (fijo o rotativo). Pulsa cada día para cambiar el
+        turno: <span className="shift-tag">—</span> libre, <span className="shift-tag shift-M">M</span> mañana,{' '}
+        <span className="shift-tag shift-T">T</span> tarde y <span className="shift-tag shift-P">P</span> partido. Las vacaciones solo
+        cuentan los días que a cada uno le toca trabajar.
+      </p>
+      {groups.length === 0 ? (
+        <p className="muted small">No hay horarios: todo el equipo trabaja los días generales de arriba.</p>
+      ) : (
+        <div className="schedule-table">
+          <div className="schedule-row schedule-head">
+            <span>Nombre</span>
+            {WEEK_ORDER.map((d) => (
+              <span key={d}>{WEEKDAYS_ES[d].slice(0, 3)}</span>
+            ))}
+            <span />
+          </div>
+          {groups.map((g, i) => (
+            <div key={g.id} className="schedule-row">
+              <input value={g.name} onChange={(e) => update(i, { ...g, name: e.target.value })} aria-label="Nombre del horario" />
+              {WEEK_ORDER.map((d) => {
+                const v = g.days[d] ?? null;
+                return (
+                  <button
+                    key={d}
+                    type="button"
+                    className={`shift-btn ${v ? `shift-${v}` : ''}`}
+                    title={`${WEEKDAYS_ES[d]}: ${v ? SHIFTS[v].label : 'libre'}`}
+                    onClick={() => {
+                      const next = SHIFT_CYCLE[(SHIFT_CYCLE.indexOf(v) + 1) % SHIFT_CYCLE.length];
+                      update(i, { ...g, days: g.days.map((x, j) => (j === d ? next : x)) });
+                    }}
+                  >
+                    {v ?? '—'}
+                  </button>
+                );
+              })}
+              <div className="row-actions">
+                <button
+                  className="icon-btn"
+                  title="Duplicar"
+                  aria-label={`Duplicar ${g.name}`}
+                  onClick={() => onChange([...groups.slice(0, i + 1), { ...g, id: newId(), name: `${g.name} (copia)` }, ...groups.slice(i + 1)])}
+                >
+                  <Icon name="plus" size={16} />
+                </button>
+                <button className="icon-btn" title="Borrar" aria-label={`Borrar ${g.name}`} onClick={() => remove(g)}>
+                  <Icon name="trash" size={16} />
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+      <p className="muted small">
+        Consejo: si en el turno de mañana cada persona hace la jornada partida un día distinto, duplica el horario («Mañana · partido
+        lunes», «Mañana · partido martes»…).
+      </p>
+    </section>
   );
 }

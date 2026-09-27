@@ -109,4 +109,38 @@ describe('API', () => {
     expect(xls.status).toBe(400);
     expect(xls.data.error).toMatch(/Guardar como/);
   });
+
+  it('asigna horarios y aplica el límite de sábados de vacaciones', async () => {
+    const state = (await call<DataState>('GET', '/api/state')).data;
+    expect(state.settings.maxVacationSaturdays).toBe(2);
+    expect(state.settings.scheduleGroups.map((g) => g.name)).toEqual(['Mañana', 'Tarde', 'Sábados']);
+
+    const bad = await call('POST', '/api/employees', { name: 'X', schedule: { kind: 'fijo', groupId: 'no-existe' } }, true);
+    expect(bad.status).toBe(400);
+    const rota = await call<Employee>(
+      'POST',
+      '/api/employees',
+      { name: 'Rosa Turnos', schedule: { kind: 'rotativo', groupIds: ['manana', 'tarde'], start: '2026-08-05', everyWeeks: 1 } },
+      true,
+    );
+    expect(rota.data.schedule).toEqual({ kind: 'rotativo', groupIds: ['manana', 'tarde'], start: '2026-08-03', everyWeeks: 1 });
+
+    const tarde = await call<Employee>('POST', '/api/employees', { name: 'Toni Tardes', schedule: { kind: 'fijo', groupId: 'tarde' } }, true);
+    const ask = (start: string, end: string, admin = false) =>
+      call<Absence>('POST', '/api/absences', { employeeId: tarde.data.id, start, end, type: 'vacaciones' }, admin);
+    expect((await ask('2026-06-01', '2026-06-06')).status).toBe(200); // 1 sábado
+    expect((await ask('2026-06-08', '2026-06-13')).status).toBe(200); // 2 sábados
+    const third = await ask('2026-06-15', '2026-06-20');
+    expect(third.status).toBe(409);
+    expect((third.data as unknown as { error: string }).error).toMatch(/sábado/);
+    expect((await ask('2026-06-15', '2026-06-19')).status).toBe(200); // sin el sábado sí
+    expect((await ask('2026-06-27', '2026-06-27', true)).status).toBe(200); // el responsable puede saltárselo
+
+    // Al borrar un horario, quien lo tenía se queda con el resto.
+    const groups = state.settings.scheduleGroups.filter((g) => g.id !== 'tarde');
+    expect((await call('PUT', '/api/settings', { scheduleGroups: groups }, true)).status).toBe(200);
+    const after = (await call<DataState>('GET', '/api/state')).data;
+    expect(after.employees.find((e) => e.id === rota.data.id)?.schedule).toEqual({ kind: 'fijo', groupId: 'manana' });
+    expect(after.employees.find((e) => e.id === tarde.data.id)?.schedule).toBeNull();
+  });
 });

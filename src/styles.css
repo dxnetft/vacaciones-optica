@@ -655,6 +655,17 @@ textarea {
   font-weight: 600;
   color: var(--muted);
 }
+.cov-split {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  line-height: 1.05;
+  font-size: 10px;
+}
+.cov-split span:first-child {
+  border-bottom: 1px solid currentColor;
+  padding: 0 2px;
+}
 .tl-cov.some {
   color: var(--text);
 }
@@ -685,6 +696,43 @@ textarea {
 .tl-cell {
   cursor: cell;
   box-shadow: inset -1px 0 0 color-mix(in srgb, var(--border) 60%, transparent);
+}
+.tl-cell {
+  display: grid;
+  place-items: center;
+}
+.tl-cell.rest {
+  background: repeating-linear-gradient(-45deg, var(--off) 0 4px, transparent 4px 8px);
+}
+.shift {
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  opacity: 0.55;
+  pointer-events: none;
+}
+.shift-M {
+  color: #b7791f;
+}
+.shift-T {
+  color: #4f46e5;
+}
+.shift-P {
+  color: #0f766e;
+}
+.legend .shift {
+  opacity: 1;
+  font-size: 12px;
+  margin-left: 4px;
+}
+.legend-rest {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+  margin-left: 6px;
+  border: 1px solid var(--border);
+  background: repeating-linear-gradient(-45deg, var(--off) 0 3px, var(--surface) 3px 6px);
 }
 .tl-cell.selecting {
   background: color-mix(in srgb, var(--brand) 45%, transparent) !important;
@@ -1039,6 +1087,10 @@ textarea {
   min-width: 26px;
   text-align: right;
   font-size: 15px;
+}
+td.num.bad {
+  color: var(--red);
+  font-weight: 700;
 }
 .balance b.bad {
   color: var(--red);
@@ -1418,7 +1470,111 @@ textarea {
   margin-top: 16px;
 }
 
+.rotation {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-2);
+}
+.rotation-row {
+  display: grid;
+  grid-template-columns: 120px 1fr auto;
+  gap: 8px;
+  align-items: center;
+}
+.rotation-row .check-inline {
+  margin: 0;
+  align-items: center;
+}
+.rotation-row .check-inline input {
+  margin-top: 0;
+}
+.tiny-input {
+  width: 56px;
+}
+.schedule-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 4px;
+}
+.sp-row {
+  display: grid;
+  grid-template-columns: 100px repeat(7, 28px);
+  gap: 4px;
+  align-items: center;
+}
+.sp-head span {
+  font-size: 11px;
+  color: var(--muted);
+  text-align: center;
+}
+.sp-row .shift-tag {
+  padding: 2px 0;
+}
+
 /* ---------- Ajustes ---------- */
+
+.schedule-table {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 12px 0;
+  overflow-x: auto;
+}
+.schedule-row {
+  display: grid;
+  grid-template-columns: minmax(140px, 1fr) repeat(7, 44px) 72px;
+  gap: 6px;
+  align-items: center;
+  min-width: 520px;
+}
+.schedule-head span {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+  text-align: center;
+}
+.schedule-head span:first-child {
+  text-align: left;
+}
+.shift-btn {
+  padding: 7px 0;
+  font-weight: 700;
+  color: var(--muted);
+  background: var(--surface-2);
+}
+.shift-btn.shift-M,
+.shift-tag.shift-M {
+  background: #fdf0d5;
+  border-color: #f3d38c;
+  color: #8a5a00;
+}
+.shift-btn.shift-T,
+.shift-tag.shift-T {
+  background: #e7e7fd;
+  border-color: #c3c4f7;
+  color: #3730a3;
+}
+.shift-btn.shift-P,
+.shift-tag.shift-P {
+  background: #d9f2ee;
+  border-color: #a5ddd3;
+  color: #0f5f58;
+}
+.shift-tag {
+  display: inline-block;
+  min-width: 18px;
+  padding: 0 4px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  text-align: center;
+  font-weight: 700;
+  font-size: 11px;
+}
 
 .holiday-year h4 {
   margin-top: 16px;

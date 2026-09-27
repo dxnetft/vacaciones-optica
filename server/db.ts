@@ -3,6 +3,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import type { DataState, Settings } from '../shared/types.ts';
 import { spanishNationalHolidays } from '../shared/dates.ts';
+import { DEFAULT_SCHEDULE_GROUPS } from '../shared/schedule.ts';
 
 /** Estado persistido: los datos de la app más el hash del PIN de responsable. */
 export interface DB extends DataState {
@@ -25,7 +26,9 @@ function defaultSettings(): Settings {
     countMode: 'laborables',
     workingWeekdays: [1, 2, 3, 4, 5, 6],
     defaultAnnualDays: 23,
+    maxVacationSaturdays: 2,
     holidays: [...spanishNationalHolidays(year), ...spanishNationalHolidays(year + 1)],
+    scheduleGroups: DEFAULT_SCHEDULE_GROUPS.map((g) => ({ ...g, days: [...g.days] })),
   };
 }
 

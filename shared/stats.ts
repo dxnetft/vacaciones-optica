@@ -1,7 +1,46 @@
 import { ABSENCE_TYPES } from './types.ts';
 import type { Absence, DataState, Employee, ISODate, Store } from './types.ts';
-import { addDays, clampRange, countDays, dayRules, isWorkingDay, overlaps } from './dates.ts';
+import { addDays, clampRange, dayRules, diffDays, isWorkingDay, overlaps, weekday } from './dates.ts';
 import type { DayRules } from './dates.ts';
+import { coversAfternoon, coversMorning, hasSchedule, workOn } from './schedule.ts';
+import type { WorkDay } from './schedule.ts';
+
+/**
+ * Días que consume un periodo para una persona. En modo laborable solo cuentan los días que
+ * le toca trabajar según su horario (o los días laborables generales si no tiene horario).
+ */
+export function countDaysFor(
+  emp: Pick<Employee, 'schedule'>,
+  start: ISODate,
+  end: ISODate,
+  mode: DataState['settings']['countMode'],
+  rules: DayRules,
+): number {
+  if (end < start) return 0;
+  if (mode === 'naturales') return diffDays(start, end) + 1;
+  let n = 0;
+  for (let d = start; d <= end; d = addDays(d, 1)) if (workOn(emp, d, rules)) n++;
+  return n;
+}
+
+/** Sábados que le tocaba trabajar dentro del periodo, agrupados por año. */
+export function workedSaturdays(emp: Pick<Employee, 'schedule'>, start: ISODate, end: ISODate, rules: DayRules): Map<number, number> {
+  const out = new Map<number, number>();
+  if (end < start) return out;
+  // Avanza hasta el primer sábado y luego de semana en semana.
+  let d = addDays(start, (6 - weekday(start) + 7) % 7);
+  for (; d <= end; d = addDays(d, 7)) {
+    if (!workOn(emp, d, rules)) continue;
+    const y = Number(d.slice(0, 4));
+    out.set(y, (out.get(y) ?? 0) + 1);
+  }
+  return out;
+}
+
+/** Si en el modo actual tiene sentido el límite de sábados de vacaciones. */
+export function saturdayLimit(settings: DataState['settings']): number {
+  return settings.countMode === 'laborables' ? (settings.maxVacationSaturdays ?? 0) : 0;
+}
 
 export interface Balance {
   allowance: number;
@@ -10,6 +49,11 @@ export interface Balance {
   remaining: number;
   /** Días de otras ausencias (no descuentan saldo), para información. */
   otherDays: number;
+  /** Sábados de vacaciones aprobados y pendientes. */
+  saturdaysUsed: number;
+  saturdaysPending: number;
+  /** Máximo de sábados de vacaciones al año. 0 = sin límite. */
+  maxSaturdays: number;
 }
 
 export function allowanceFor(emp: Employee, state: Pick<DataState, 'settings'>): number {
@@ -22,18 +66,37 @@ export function balanceFor(emp: Employee, year: number, state: DataState, rules 
   let used = 0;
   let pending = 0;
   let otherDays = 0;
+  let saturdaysUsed = 0;
+  let saturdaysPending = 0;
   for (const a of state.absences) {
     if (a.employeeId !== emp.id || a.status === 'rechazada') continue;
     const r = clampRange(a.start, a.end, yStart, yEnd);
     if (!r) continue;
-    const n = countDays(r[0], r[1], state.settings.countMode, rules);
+    const n = countDaysFor(emp, r[0], r[1], state.settings.countMode, rules);
     if (!ABSENCE_TYPES[a.type].countsAgainstBalance) {
       if (a.status === 'aprobada') otherDays += n;
-    } else if (a.status === 'aprobada') used += n;
-    else pending += n;
+      continue;
+    }
+    const sats = workedSaturdays(emp, r[0], r[1], rules).get(year) ?? 0;
+    if (a.status === 'aprobada') {
+      used += n;
+      saturdaysUsed += sats;
+    } else {
+      pending += n;
+      saturdaysPending += sats;
+    }
   }
   const allowance = allowanceFor(emp, state);
-  return { allowance, used, pending, remaining: allowance - used - pending, otherDays };
+  return {
+    allowance,
+    used,
+    pending,
+    remaining: allowance - used - pending,
+    otherDays,
+    saturdaysUsed,
+    saturdaysPending,
+    maxSaturdays: saturdayLimit(state.settings),
+  };
 }
 
 /** Índice rápido: empleado -> ausencias (no rechazadas) ordenadas por inicio. */
@@ -66,9 +129,15 @@ export function absenceOn(list: Absence[] | undefined, day: ISODate): Absence | 
 export interface DayCoverage {
   day: ISODate;
   working: boolean;
+  /** Personas a las que les toca trabajar ese día (estén o no de vacaciones). */
   total: number;
   absent: number;
   present: number;
+  /** Presentes de mañana y de tarde (quien hace partido cuenta en los dos). */
+  morning: number;
+  afternoon: number;
+  /** Si alguien de la tienda tiene turnos: el mínimo se comprueba por turno. */
+  byShift: boolean;
   minStaff: number;
   /** Por debajo del mínimo contando solo aprobadas. */
   breach: boolean;
@@ -98,6 +167,7 @@ export function coverageFor(
     (a) => ids.has(a.employeeId) && a.status !== 'rechazada' && first && overlaps(a.start, a.end, first, last),
   );
   const minStaff = store?.minStaff ?? 0;
+  const byShift = emps.some((e) => hasSchedule(e, rules));
   return days.map((day) => {
     const approved = new Set<string>();
     const any = new Set<string>();
@@ -112,16 +182,39 @@ export function coverageFor(
       approved.add(extra.employeeId);
     }
     const working = isWorkingDay(day, rules);
-    const present = emps.length - approved.size;
+    let total = 0;
+    let absent = 0;
+    const count = (out: Set<string>) => {
+      let m = 0;
+      let t = 0;
+      for (const e of emps) {
+        const w: WorkDay = workOn(e, day, rules);
+        if (!w || out.has(e.id)) continue;
+        if (coversMorning(w)) m++;
+        if (coversAfternoon(w)) t++;
+      }
+      return [m, t] as const;
+    };
+    for (const e of emps) {
+      if (!workOn(e, day, rules)) continue;
+      total++;
+      if (approved.has(e.id)) absent++;
+    }
+    const [morning, afternoon] = count(approved);
+    const [morningP, afternoonP] = count(any);
+    const short = (m: number, t: number) => working && minStaff > 0 && (m < minStaff || t < minStaff);
     return {
       day,
       working,
-      total: emps.length,
-      absent: approved.size,
-      present,
+      total,
+      absent,
+      present: total - absent,
+      morning,
+      afternoon,
+      byShift,
       minStaff,
-      breach: working && minStaff > 0 && present < minStaff,
-      breachIfPending: working && minStaff > 0 && emps.length - any.size < minStaff,
+      breach: short(morning, afternoon),
+      breachIfPending: short(morningP, afternoonP),
       absentNames: [...any].map((id) => names.get(id) ?? '?'),
     };
   });
@@ -129,6 +222,10 @@ export function coverageFor(
 
 export interface RequestCheck {
   days: number;
+  /** Sábados de vacaciones que gasta la solicitud. */
+  saturdays: number;
+  /** Años en los que se pasaría del máximo de sábados de vacaciones, con el total resultante. */
+  saturdaysOver: { year: number; total: number; max: number }[];
   overlapsOwn: Absence[];
   colleaguesOff: { employee: Employee; absence: Absence }[];
   breachDays: ISODate[];
@@ -137,7 +234,7 @@ export interface RequestCheck {
 /** Comprueba una solicitud: días que consume, compañeros ausentes y días sin cobertura mínima. */
 export function checkRequest(
   state: DataState,
-  req: { employeeId: string; start: ISODate; end: ISODate; ignoreId?: string },
+  req: { employeeId: string; start: ISODate; end: ISODate; ignoreId?: string; type?: Absence['type'] },
 ): RequestCheck {
   const rules = dayRules(state.settings);
   const emp = state.employees.find((e) => e.id === req.employeeId);
@@ -158,8 +255,23 @@ export function checkRequest(
     const scoped: DataState = { ...state, absences: others };
     for (const c of coverageFor(scoped, emp.storeId, days, rules, req)) if (c.breach) breachDays.push(c.day);
   }
+  let saturdays = 0;
+  const saturdaysOver: RequestCheck['saturdaysOver'] = [];
+  const max = saturdayLimit(state.settings);
+  if (emp && ABSENCE_TYPES[req.type ?? 'vacaciones'].countsAgainstBalance && req.end <= addDays(req.start, 400)) {
+    const scoped: DataState = { ...state, absences: others };
+    for (const [year, n] of workedSaturdays(emp, req.start, req.end, rules)) {
+      saturdays += n;
+      if (!max) continue;
+      const b = balanceFor(emp, year, scoped, rules);
+      const total = b.saturdaysUsed + b.saturdaysPending + n;
+      if (total > max) saturdaysOver.push({ year, total, max });
+    }
+  }
   return {
-    days: countDays(req.start, req.end, state.settings.countMode, rules),
+    days: emp ? countDaysFor(emp, req.start, req.end, state.settings.countMode, rules) : 0,
+    saturdays,
+    saturdaysOver,
     overlapsOwn,
     colleaguesOff,
     breachDays,

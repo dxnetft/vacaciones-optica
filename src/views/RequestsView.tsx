@@ -55,7 +55,7 @@ export function RequestsView() {
           {pending.map((a) => {
             const e = emp(a.employeeId);
             if (!e) return null;
-            const check = checkRequest(state, { employeeId: a.employeeId, start: a.start, end: a.end, ignoreId: a.id });
+            const check = checkRequest(state, { employeeId: a.employeeId, start: a.start, end: a.end, type: a.type, ignoreId: a.id });
             const bal = balanceFor(e, Number(a.start.slice(0, 4)), state);
             return (
               <article key={a.id} className="request-card">
@@ -84,7 +84,14 @@ export function RequestsView() {
                           <Icon name="alert" size={13} /> {check.breachDays.length} día{check.breachDays.length > 1 ? 's' : ''} bajo mínimo
                         </span>
                       )}
-                      {check.colleaguesOff.length === 0 && check.breachDays.length === 0 && <span className="chip chip-ok">Sin conflictos</span>}
+                      {check.saturdaysOver.length > 0 && (
+                        <span className="chip chip-bad">
+                          <Icon name="alert" size={13} /> {check.saturdaysOver[0].total} sábados (máx. {check.saturdaysOver[0].max})
+                        </span>
+                      )}
+                      {check.colleaguesOff.length === 0 && check.breachDays.length === 0 && check.saturdaysOver.length === 0 && (
+                        <span className="chip chip-ok">Sin conflictos</span>
+                      )}
                     </div>
                   </div>
                 </div>

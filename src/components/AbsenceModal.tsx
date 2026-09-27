@@ -28,8 +28,8 @@ export function AbsenceModal({ absence, draft, onClose }: { absence?: Absence; d
   const emp = state.employees.find((e) => e.id === employeeId);
 
   const check = useMemo(
-    () => (emp && validDates ? checkRequest(state, { employeeId, start, end, ignoreId: absence?.id }) : null),
-    [state, emp, employeeId, start, end, validDates, absence?.id],
+    () => (emp && validDates ? checkRequest(state, { employeeId, start, end, type, ignoreId: absence?.id }) : null),
+    [state, emp, employeeId, start, end, type, validDates, absence?.id],
   );
   const balance = useMemo(() => (emp ? balanceFor(emp, Number(start.slice(0, 4)) || new Date().getFullYear(), state) : null), [emp, start, state]);
   const countsBalance = ABSENCE_TYPES[type].countsAgainstBalance;
@@ -37,6 +37,9 @@ export function AbsenceModal({ absence, draft, onClose }: { absence?: Absence; d
     ? checkRequest(state, { employeeId: absence.employeeId, start: absence.start, end: absence.end, ignoreId: absence.id }).days
     : 0;
   const remainingAfter = balance && check ? balance.remaining + previouslyCounted - (countsBalance ? check.days : 0) : null;
+  const saturdaysOver = check?.saturdaysOver[0];
+  // El equipo no puede pasarse del máximo de sábados; el responsable sí (el servidor aplica la misma regla).
+  const blockedBySaturdays = !!saturdaysOver && !admin;
 
   const byStore = useMemo(() => {
     const groups = new Map<string, typeof activeEmployees>();
@@ -98,7 +101,7 @@ export function AbsenceModal({ absence, draft, onClose }: { absence?: Absence; d
             </>
           )}
           {editable && (
-            <button className="primary" onClick={save} disabled={!validDates || !employeeId}>
+            <button className="primary" onClick={save} disabled={!validDates || !employeeId || blockedBySaturdays}>
               {absence ? 'Guardar' : admin ? 'Añadir' : 'Enviar solicitud'}
             </button>
           )}
@@ -205,7 +208,25 @@ export function AbsenceModal({ absence, draft, onClose }: { absence?: Absence; d
                     <span>le quedarán en {start.slice(0, 4)}</span>
                   </div>
                 )}
+                {countsBalance && balance && balance.maxSaturdays > 0 && check.saturdays > 0 && (
+                  <div className={`stat ${saturdaysOver ? 'stat-bad' : ''}`}>
+                    <b>{check.saturdays}</b>
+                    <span>
+                      {check.saturdays === 1 ? 'sábado' : 'sábados'} (máx. {balance.maxSaturdays} al año)
+                    </span>
+                  </div>
+                )}
               </div>
+              {saturdaysOver && (
+                <div className="callout callout-bad">
+                  <Icon name="alert" />
+                  <div>
+                    <b>Se pasa de los sábados de vacaciones:</b> serían {saturdaysOver.total} en {saturdaysOver.year} y el máximo es{' '}
+                    {saturdaysOver.max}.{' '}
+                    {admin ? 'Como responsable puedes guardarla igualmente.' : 'Pide los días sin incluir el sábado.'}
+                  </div>
+                </div>
+              )}
               {check.overlapsOwn.length > 0 && (
                 <div className="callout callout-warn">
                   <Icon name="alert" /> Ya tiene otra ausencia en esas fechas ({formatRange(check.overlapsOwn[0].start, check.overlapsOwn[0].end)}).

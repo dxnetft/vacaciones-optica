@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react';
-import type { Employee, Store } from '../../shared/types.ts';
-import { dayRules } from '../../shared/dates.ts';
+import type { Employee, EmployeeSchedule, Store } from '../../shared/types.ts';
+import { WEEKDAYS_SHORT, addDays, dayRules, mondayOf, todayISO } from '../../shared/dates.ts';
 import { balanceFor } from '../../shared/stats.ts';
+import { currentRotationIndex, describeSchedule, rotationStartFor, workOn } from '../../shared/schedule.ts';
 import { api } from '../api.ts';
 import { useApp } from '../context.tsx';
 import { Avatar, Empty, Icon, Modal } from '../components/ui.tsx';
@@ -88,9 +89,15 @@ export function TeamView({ year, onYear }: { year: number; onYear: (y: number) =
               <tr>
                 <th>Persona</th>
                 <th>Tienda</th>
+                <th>Horario</th>
                 <th className="num">Días {year}</th>
                 <th className="num">Aprobados</th>
                 <th className="num">Pendientes</th>
+                {state.settings.countMode === 'laborables' && state.settings.maxVacationSaturdays > 0 && (
+                  <th className="num" title="Sábados de vacaciones gastados (incluye pendientes) sobre el máximo del año">
+                    Sábados
+                  </th>
+                )}
                 <th className="balance-col">Le quedan</th>
                 {admin && <th />}
               </tr>
@@ -110,12 +117,18 @@ export function TeamView({ year, onYear }: { year: number; onYear: (y: number) =
                       </div>
                     </td>
                     <td className="muted">{storeName(e.storeId)}</td>
+                    <td className={describeSchedule(e, rules) ? '' : 'muted'}>{describeSchedule(e, rules) || 'General'}</td>
                     <td className="num">
                       {b.allowance}
                       {e.annualDays !== null && <span className="muted small" title="Valor personalizado"> *</span>}
                     </td>
                     <td className="num">{b.used}</td>
                     <td className="num">{b.pending || '—'}</td>
+                    {b.maxSaturdays > 0 && (
+                      <td className={`num ${b.saturdaysUsed + b.saturdaysPending > b.maxSaturdays ? 'bad' : ''}`}>
+                        {b.saturdaysUsed + b.saturdaysPending}/{b.maxSaturdays}
+                      </td>
+                    )}
                     <td>
                       <div className="balance">
                         <div className="bar">
@@ -159,8 +172,14 @@ function EmployeeModal({ value, onClose }: { value: Partial<Employee>; onClose: 
     active: value.active ?? true,
   });
   const set = <K extends keyof typeof form>(k: K, v: (typeof form)[K]) => setForm((f) => ({ ...f, [k]: v }));
+  const [schedule, setSchedule] = useState<EmployeeSchedule | null>(value.schedule ?? null);
   const save = async () => {
-    const body = { ...form, storeId: form.storeId || null, annualDays: form.annualDays === '' ? null : Number(form.annualDays) };
+    const body = {
+      ...form,
+      storeId: form.storeId || null,
+      annualDays: form.annualDays === '' ? null : Number(form.annualDays),
+      schedule,
+    };
     const ok = await run(
       () => (value.id ? api('PUT', `/api/employees/${value.id}`, body) : api('POST', '/api/employees', body)),
       value.id ? 'Persona actualizada' : 'Persona añadida',
@@ -217,6 +236,7 @@ function EmployeeModal({ value, onClose }: { value: Partial<Employee>; onClose: 
         />
         <small className="muted">Déjalo vacío para usar el valor general de Ajustes.</small>
       </label>
+      <ScheduleField value={schedule} onChange={setSchedule} />
       <div className="field">
         <span>Color</span>
         <div className="color-picker">
@@ -262,10 +282,160 @@ function StoreModal({ value, onClose }: { value: Partial<Store>; onClose: () => 
         <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Ej.: Diagonal" />
       </label>
       <label className="field">
-        <span>Mínimo de personas trabajando cada día</span>
+        <span>Mínimo de personas trabajando</span>
         <input type="number" min={0} value={minStaff} onChange={(e) => setMinStaff(e.target.value)} />
-        <small className="muted">Si un día quedan menos, se marca en rojo y se avisa al pedir o aprobar vacaciones. 0 = sin mínimo.</small>
+        <small className="muted">
+          Si un día quedan menos, se marca en rojo y se avisa al pedir o aprobar vacaciones. Si el equipo tiene horarios con turnos, el
+          mínimo se aplica a la mañana y a la tarde por separado. 0 = sin mínimo.
+        </small>
       </label>
     </Modal>
+  );
+}
+
+/** Horario de una persona: sin horario, fijo o rotativo, con una vista previa de las próximas semanas. */
+function ScheduleField({ value, onChange }: { value: EmployeeSchedule | null; onChange: (s: EmployeeSchedule | null) => void }) {
+  const { state } = useApp();
+  const groups = state.settings.scheduleGroups;
+  const rules = useMemo(() => dayRules(state.settings), [state.settings]);
+  const today = todayISO();
+  const kind = value?.kind ?? 'none';
+  const current = value?.kind === 'rotativo' ? currentRotationIndex(value, today) : 0;
+
+  const setKind = (k: string) => {
+    if (k === 'fijo') onChange({ kind: 'fijo', groupId: value?.kind === 'rotativo' ? value.groupIds[current] : groups[0].id });
+    else if (k === 'rotativo') {
+      const first = value?.kind === 'fijo' ? value.groupId : groups[0].id;
+      const second = groups.find((g) => g.id !== first)?.id ?? first;
+      onChange({ kind: 'rotativo', groupIds: [first, second], start: mondayOf(today), everyWeeks: 1 });
+    } else onChange(null);
+  };
+  // Al cambiar la rotación se mantiene qué posición toca esta semana.
+  const setRotation = (groupIds: string[], everyWeeks: number, index: number) =>
+    onChange({ kind: 'rotativo', groupIds, everyWeeks, start: rotationStartFor(today, Math.min(index, groupIds.length - 1), everyWeeks) });
+
+  if (!groups.length) {
+    return (
+      <div className="field">
+        <span>Horario</span>
+        <small className="muted">Todavía no hay horarios. Créalos en Ajustes → Horarios.</small>
+      </div>
+    );
+  }
+
+  const week = mondayOf(today);
+  const preview = value
+    ? [0, 1, 2, 3].map((w) => {
+        const days = Array.from({ length: 7 }, (_, i) => addDays(week, w * 7 + i));
+        return { label: w === 0 ? 'Esta semana' : w === 1 ? 'La próxima' : `En ${w} semanas`, days };
+      })
+    : [];
+
+  return (
+    <div className="field">
+      <span>Horario</span>
+      <select value={kind} onChange={(e) => setKind(e.target.value)}>
+        <option value="none">Sin horario (trabaja los días generales de Ajustes)</option>
+        <option value="fijo">Fijo: siempre el mismo horario</option>
+        <option value="rotativo" disabled={groups.length < 2}>
+          Rotativo: va cambiando de horario
+        </option>
+      </select>
+
+      {value?.kind === 'fijo' && (
+        <select value={value.groupId} onChange={(e) => onChange({ kind: 'fijo', groupId: e.target.value })} aria-label="Horario fijo">
+          {groups.map((g) => (
+            <option key={g.id} value={g.id}>
+              {g.name}
+            </option>
+          ))}
+        </select>
+      )}
+
+      {value?.kind === 'rotativo' && (
+        <div className="rotation">
+          {value.groupIds.map((id, i) => (
+            <div key={i} className="rotation-row">
+              <label className="check-inline" title="Marca qué horario le toca esta semana">
+                <input
+                  type="radio"
+                  name="rotation-now"
+                  checked={current === i}
+                  onChange={() => setRotation(value.groupIds, value.everyWeeks, i)}
+                />
+                <span className="muted small">{current === i ? 'Esta semana' : `Turno ${i + 1}`}</span>
+              </label>
+              <select
+                value={id}
+                onChange={(e) => setRotation(value.groupIds.map((x, j) => (j === i ? e.target.value : x)), value.everyWeeks, current)}
+                aria-label={`Horario ${i + 1} de la rotación`}
+              >
+                {groups.map((g) => (
+                  <option key={g.id} value={g.id}>
+                    {g.name}
+                  </option>
+                ))}
+              </select>
+              {value.groupIds.length > 2 && (
+                <button
+                  type="button"
+                  className="icon-btn"
+                  aria-label="Quitar de la rotación"
+                  onClick={() => setRotation(value.groupIds.filter((_, j) => j !== i), value.everyWeeks, current > i ? current - 1 : current)}
+                >
+                  <Icon name="x" size={14} />
+                </button>
+              )}
+            </div>
+          ))}
+          <div className="inline-row">
+            <button
+              type="button"
+              className="small-btn"
+              onClick={() => setRotation([...value.groupIds, groups[0].id], value.everyWeeks, current)}
+            >
+              <Icon name="plus" size={14} /> Añadir a la rotación
+            </button>
+            <label className="inline-row small">
+              Cambia cada
+              <input
+                type="number"
+                min={1}
+                max={12}
+                className="tiny-input"
+                value={value.everyWeeks}
+                onChange={(e) => setRotation(value.groupIds, Math.min(12, Math.max(1, Number(e.target.value) || 1)), current)}
+              />
+              {value.everyWeeks === 1 ? 'semana' : 'semanas'}
+            </label>
+          </div>
+        </div>
+      )}
+
+      {preview.length > 0 && (
+        <div className="schedule-preview">
+          <div className="sp-row sp-head">
+            <span />
+            {[1, 2, 3, 4, 5, 6, 0].map((d) => (
+              <span key={d}>{WEEKDAYS_SHORT[d]}</span>
+            ))}
+          </div>
+          {preview.map((w) => (
+            <div key={w.label} className="sp-row">
+              <span className="muted small">{w.label}</span>
+              {w.days.map((d) => {
+                const s = workOn({ schedule: value }, d, rules);
+                const shift = s === 'dia' ? null : s;
+                return (
+                  <span key={d} className={`shift-tag ${shift ? `shift-${shift}` : ''}`} title={`${d.slice(8)}/${d.slice(5, 7)}`}>
+                    {shift ?? '—'}
+                  </span>
+                );
+              })}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }

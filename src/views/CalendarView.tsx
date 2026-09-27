@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ABSENCE_TYPES } from '../../shared/types.ts';
+import { ABSENCE_TYPES, SHIFTS } from '../../shared/types.ts';
 import type { Absence, Employee, ISODate } from '../../shared/types.ts';
-import { MONTHS_ES, WEEKDAYS_SHORT, countDays, dayRules, formatRange, isWorkingDay, monthDays, normalizeText, todayISO, weekday } from '../../shared/dates.ts';
-import { absencesByEmployee, balanceFor, coverageFor } from '../../shared/stats.ts';
+import { MONTHS_ES, WEEKDAYS_SHORT, dayRules, formatRange, isWorkingDay, monthDays, normalizeText, todayISO, weekday } from '../../shared/dates.ts';
+import { absencesByEmployee, balanceFor, countDaysFor, coverageFor } from '../../shared/stats.ts';
+import { describeSchedule, hasSchedule, workOn } from '../../shared/schedule.ts';
 import { useApp } from '../context.tsx';
 import { AbsenceModal } from '../components/AbsenceModal.tsx';
 import type { AbsenceDraft } from '../components/AbsenceModal.tsx';
@@ -54,6 +55,7 @@ export function CalendarView({ year, month, onChange }: { year: number; month: n
   const outToday = state.absences.filter((a) => a.status === 'aprobada' && a.start <= today && a.end >= today);
   const pending = state.absences.filter((a) => a.status === 'pendiente').length;
   const breachCount = [...coverage.values()].flat().filter((c) => c.breach).length;
+  const anyShifts = state.employees.some((e) => e.active && hasSchedule(e, rules));
 
   // Selección arrastrando: al soltar se abre el formulario con el rango.
   useEffect(() => {
@@ -188,9 +190,21 @@ export function CalendarView({ year, month, onChange }: { year: number; month: n
                     <div
                       key={c.day}
                       className={`tl-cov ${dayClass(c.day)} ${c.breach ? 'bad' : c.breachIfPending ? 'warn' : c.absent ? 'some' : ''}`}
-                      title={`${c.present} de ${c.total} trabajando${c.minStaff ? ` (mínimo ${c.minStaff})` : ''}${c.absentNames.length ? `\nFuera: ${c.absentNames.join(', ')}` : ''}`}
+                      title={
+                        (c.byShift
+                          ? `Mañana: ${c.morning} · Tarde: ${c.afternoon}${c.minStaff ? ` (mínimo ${c.minStaff} por turno)` : ''}`
+                          : `${c.present} de ${c.total} trabajando${c.minStaff ? ` (mínimo ${c.minStaff})` : ''}`) +
+                        (c.absentNames.length ? `\nFuera: ${c.absentNames.join(', ')}` : '')
+                      }
                     >
-                      {c.working ? c.present : ''}
+                      {!c.working ? '' : c.byShift ? (
+                        <span className="cov-split">
+                          <span>{c.morning}</span>
+                          <span>{c.afternoon}</span>
+                        </span>
+                      ) : (
+                        c.present
+                      )}
                     </div>
                   ))}
                 </div>
@@ -199,36 +213,44 @@ export function CalendarView({ year, month, onChange }: { year: number; month: n
                   const list = (byEmp.get(e.id) ?? []).filter((a) => a.start <= last && a.end >= first);
                   const bal = balanceFor(e, year, state, rules);
                   const selRange = sel?.employeeId === e.id ? [Math.min(sel.anchor, sel.current), Math.max(sel.anchor, sel.current)] : null;
+                  const schedule = describeSchedule(e, rules);
                   return (
                     <div key={e.id} className="tl-row tl-person">
                       <div className="tl-name">
                         <Avatar employee={e} size={26} />
-                        <span className="tl-person-name" title={e.name}>
+                        <span className="tl-person-name" title={schedule ? `${e.name}\nHorario: ${schedule}` : e.name}>
                           {e.name}
                         </span>
                         <span className={`pill ${bal.remaining < 0 ? 'pill-bad' : ''}`} title={`Le quedan ${bal.remaining} días de vacaciones en ${year}`}>
                           {bal.remaining}
                         </span>
                       </div>
-                      {days.map((d, i) => (
-                        <div
-                          key={d}
-                          className={`tl-cell ${dayClass(d)} ${selRange && i >= selRange[0] && i <= selRange[1] ? 'selecting' : ''}`}
-                          style={{ gridColumn: i + 2 }}
-                          onMouseDown={(ev) => {
-                            if (ev.button !== 0) return;
-                            ev.preventDefault();
-                            setSel({ employeeId: e.id, anchor: i, current: i });
-                          }}
-                          onMouseEnter={() => sel?.employeeId === e.id && setSel({ ...sel, current: i })}
-                        />
-                      ))}
+                      {days.map((d, i) => {
+                        const w = schedule ? workOn(e, d, rules) : undefined;
+                        const rest = w === null && isWorkingDay(d, rules);
+                        return (
+                          <div
+                            key={d}
+                            className={`tl-cell ${dayClass(d)} ${rest ? 'rest' : ''} ${selRange && i >= selRange[0] && i <= selRange[1] ? 'selecting' : ''}`}
+                            style={{ gridColumn: i + 2 }}
+                            title={w && w !== 'dia' ? `Turno de ${SHIFTS[w].label.toLowerCase()}` : rest ? 'No trabaja este día' : undefined}
+                            onMouseDown={(ev) => {
+                              if (ev.button !== 0) return;
+                              ev.preventDefault();
+                              setSel({ employeeId: e.id, anchor: i, current: i });
+                            }}
+                            onMouseEnter={() => sel?.employeeId === e.id && setSel({ ...sel, current: i })}
+                          >
+                            {w && w !== 'dia' && <span className={`shift shift-${w}`}>{w}</span>}
+                          </div>
+                        );
+                      })}
                       {list.map((a) => {
                         const s = a.start < first ? 0 : Number(a.start.slice(8)) - 1;
                         const en = a.end > last ? days.length - 1 : Number(a.end.slice(8)) - 1;
                         const info = ABSENCE_TYPES[a.type];
                         const span = en - s + 1;
-                        const n = countDays(a.start, a.end, state.settings.countMode, rules);
+                        const n = countDaysFor(e, a.start, a.end, state.settings.countMode, rules);
                         return (
                           <button
                             key={a.id}
@@ -259,6 +281,12 @@ export function CalendarView({ year, month, onChange }: { year: number; month: n
         <span className="legend-item">
           <i className="legend-pending" /> Pendiente de aprobar
         </span>
+        {anyShifts && (
+          <span className="legend-item">
+            <span className="shift shift-M">M</span> mañana <span className="shift shift-T">T</span> tarde{' '}
+            <span className="shift shift-P">P</span> partido <i className="legend-rest" /> no trabaja
+          </span>
+        )}
         <span className="legend-item muted">Arrastra sobre la fila de una persona para marcar varios días.</span>
       </div>
 

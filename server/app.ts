@@ -1,8 +1,9 @@
 import express from 'express';
 import type { NextFunction, Request, Response } from 'express';
-import { ABSENCE_TYPE_KEYS } from '../shared/types.ts';
-import type { Absence, AbsenceStatus, AbsenceType, Employee, ImportPayload, ImportResult, Settings, Store as ShopStore } from '../shared/types.ts';
-import { isValidISO, overlaps } from '../shared/dates.ts';
+import { ABSENCE_TYPE_KEYS, SHIFT_KEYS } from '../shared/types.ts';
+import type { Absence, AbsenceStatus, AbsenceType, Employee, EmployeeSchedule, ImportPayload, ImportResult, ScheduleGroup, Settings, Shift, Store as ShopStore } from '../shared/types.ts';
+import { isValidISO, mondayOf, overlaps } from '../shared/dates.ts';
+import { checkRequest } from '../shared/stats.ts';
 import { employeeKey } from '../shared/importer.ts';
 import { Store, hashPin, newId } from './db.ts';
 import { UserError, readWorkbook } from './excel.ts';
@@ -98,7 +99,30 @@ export function createApp(db: Store) {
         ? null
         : int(body.annualDays, 'días al año', 0, 366),
       active: body.active !== false,
+      schedule: parseSchedule(body.schedule),
     };
+  };
+
+  const parseSchedule = (v: unknown): EmployeeSchedule | null => {
+    if (!v || typeof v !== 'object') return null;
+    const s = v as Record<string, unknown>;
+    const exists = (id: unknown): id is string => typeof id === 'string' && db.data.settings.scheduleGroups.some((g) => g.id === id);
+    if (s.kind === 'fijo') {
+      if (!exists(s.groupId)) fail('El horario indicado no existe.');
+      return { kind: 'fijo', groupId: s.groupId };
+    }
+    if (s.kind === 'rotativo') {
+      if (!Array.isArray(s.groupIds) || s.groupIds.length < 2 || s.groupIds.length > 12 || !s.groupIds.every(exists)) {
+        fail('Un horario rotativo necesita al menos dos horarios existentes.');
+      }
+      return {
+        kind: 'rotativo',
+        groupIds: s.groupIds as string[],
+        start: mondayOf(date(s.start, 'inicio de la rotación')),
+        everyWeeks: s.everyWeeks === undefined ? 1 : int(s.everyWeeks, 'semanas de cada turno', 1, 12),
+      };
+    }
+    return null;
   };
 
   app.post('/api/employees', requireAdmin, (req, res) => {
@@ -136,6 +160,18 @@ export function createApp(db: Store) {
     return { employeeId, start, end, type, note };
   };
 
+  /** Límite de sábados de vacaciones al año: el equipo no puede pedir más (el responsable sí puede saltárselo). */
+  const checkSaturdays = (req: { employeeId: string; start: string; end: string; type: AbsenceType; ignoreId?: string }) => {
+    const over = checkRequest(db.publicState(), req).saturdaysOver[0];
+    if (over) {
+      fail(
+        `Con esta solicitud serían ${over.total} sábados de vacaciones en ${over.year} y el máximo es ${over.max}. ` +
+          'Pide los días sin incluir el sábado.',
+        409,
+      );
+    }
+  };
+
   app.post('/api/absences', (req, res) => {
     const admin = isAdmin(req);
     const data = parseAbsence(req.body);
@@ -144,6 +180,7 @@ export function createApp(db: Store) {
       (a) => a.employeeId === data.employeeId && a.status !== 'rechazada' && overlaps(a.start, a.end, data.start, data.end),
     );
     if (dup && !req.body.allowOverlap) fail('Esta persona ya tiene una ausencia en esas fechas.', 409);
+    if (!admin) checkSaturdays(data);
     const absence: Absence = {
       id: newId(),
       ...data,
@@ -162,6 +199,7 @@ export function createApp(db: Store) {
     const admin = isAdmin(req);
     if (!admin && absence.status !== 'pendiente') fail('Solo el responsable puede modificar ausencias ya decididas.', 403);
     const data = parseAbsence({ ...absence, ...req.body });
+    if (!admin) checkSaturdays({ ...data, ignoreId: absence.id });
     Object.assign(absence, data);
     if (data.note === undefined) delete absence.note;
     if (admin && STATUSES.includes(req.body.status) && req.body.status !== absence.status) {
@@ -191,6 +229,24 @@ export function createApp(db: Store) {
 
   /* ---------- Ajustes ---------- */
 
+  const parseGroups = (list: unknown[]): ScheduleGroup[] => {
+    if (list.length > 40) fail('Demasiados horarios.');
+    const seen = new Set<string>();
+    return list.map((raw) => {
+      const g = (raw ?? {}) as Record<string, unknown>;
+      let id = typeof g.id === 'string' && /^[\w-]{1,60}$/.test(g.id) ? g.id : newId();
+      if (seen.has(id)) id = newId();
+      seen.add(id);
+      if (!Array.isArray(g.days) || g.days.length !== 7) fail('Cada horario debe indicar los 7 días de la semana.');
+      const days = g.days.map((d: unknown) => {
+        if (d === null || d === '') return null;
+        if (!SHIFT_KEYS.includes(d as Shift)) fail('Turno no válido en un horario.');
+        return d as Shift;
+      });
+      return { id, name: str(g.name, 'nombre del horario', 60), days };
+    });
+  };
+
   app.put('/api/settings', requireAdmin, (req, res) => {
     const b = req.body ?? {};
     const s = db.data.settings;
@@ -201,6 +257,9 @@ export function createApp(db: Store) {
         ? [...new Set<number>(b.workingWeekdays.map((d: unknown) => int(d, 'día de la semana', 0, 6)))].sort()
         : s.workingWeekdays,
       defaultAnnualDays: b.defaultAnnualDays !== undefined ? int(b.defaultAnnualDays, 'días por defecto', 0, 366) : s.defaultAnnualDays,
+      maxVacationSaturdays:
+        b.maxVacationSaturdays !== undefined ? int(b.maxVacationSaturdays, 'sábados de vacaciones', 0, 53) : s.maxVacationSaturdays,
+      scheduleGroups: Array.isArray(b.scheduleGroups) ? parseGroups(b.scheduleGroups) : s.scheduleGroups,
       holidays: Array.isArray(b.holidays)
         ? b.holidays
             .map((h: { date?: unknown; name?: unknown }) => ({ date: date(h.date, 'festivo'), name: String(h.name ?? 'Festivo').slice(0, 80) }))
@@ -208,6 +267,19 @@ export function createApp(db: Store) {
         : s.holidays,
     };
     db.data.settings = next;
+    // Las personas con un horario que se ha borrado se ajustan a los que quedan.
+    const ids = new Set(next.scheduleGroups.map((g) => g.id));
+    for (const e of db.data.employees) {
+      const sc = e.schedule;
+      if (!sc) continue;
+      if (sc.kind === 'fijo') {
+        if (!ids.has(sc.groupId)) e.schedule = null;
+        continue;
+      }
+      const left = sc.groupIds.filter((id) => ids.has(id));
+      if (left.length === sc.groupIds.length) continue;
+      e.schedule = left.length >= 2 ? { ...sc, groupIds: left } : left.length === 1 ? { kind: 'fijo', groupId: left[0] } : null;
+    }
     if (typeof b.newPin === 'string') {
       if (!/^\d{4,8}$/.test(b.newPin)) fail('El PIN debe tener entre 4 y 8 cifras.');
       db.data.adminPinHash = hashPin(b.newPin);
