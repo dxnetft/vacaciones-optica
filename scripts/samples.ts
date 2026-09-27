@@ -3,6 +3,7 @@
  * Sirven para las pruebas automáticas y para probar el asistente de importación.
  */
 import ExcelJS from 'exceljs';
+import { opticaExample } from './ejemplo-optica.ts';
 
 const Y = 2026;
 const MONTHS = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
@@ -147,6 +148,7 @@ export async function perStore(): Promise<Buffer> {
 }
 
 export const SAMPLES: Record<string, () => Promise<Buffer>> = {
+  'ejemplo-optica.xlsx': opticaExample,
   'cuadrante-mensual.xlsx': monthlySheets,
   'cuadrante-colores.xlsx': yearColors,
   'listado.xlsx': listFormat,

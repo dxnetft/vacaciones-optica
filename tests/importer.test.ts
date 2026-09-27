@@ -120,6 +120,25 @@ describe('una hoja por tienda', () => {
   });
 });
 
+describe('ejemplo realista de óptica', () => {
+  it('lee las tres tiendas, letras, celdas pintadas e ignora domingos y festivos', async () => {
+    const { wb, analysis } = await load('ejemplo-optica.xlsx');
+    expect(analysis.blocks).toHaveLength(12);
+    expect(analysis.employees.filter((e) => e.include)).toHaveLength(14);
+    expect(analysis.markers.map((m) => m.key).sort()).toEqual(['f:FFFFEB84', 't:AP', 't:B', 't:F', 't:V']);
+    const out = run(wb, analysis);
+    expect(new Set(out.map((a) => a.store))).toEqual(new Set(['Diagonal', 'Gràcia', 'Sant Andreu']));
+    const s = simple(out);
+    // Celdas pintadas sin letra
+    expect(s).toContain('Sergio Navarro|2026-08-03|2026-08-14|vacaciones|Gràcia');
+    // Un periodo que cruza de junio a julio queda unido
+    expect(s).toContain('Anna Puig|2026-06-22|2026-07-03|vacaciones|Diagonal');
+    // Semana Santa: un periodo que cruza de marzo a abril
+    expect(s).toContain('Sergio Navarro|2026-03-30|2026-04-02|vacaciones|Gràcia');
+    expect(s).toContain('Marta Roca|2026-01-19|2026-01-30|baja|Gràcia');
+  });
+});
+
 describe('utilidades', () => {
   it('distingue títulos de mes de nombres de persona', () => {
     expect(monthFromTitle('JULIO 2026')).toBe(6);
