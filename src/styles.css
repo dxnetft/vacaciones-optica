@@ -1527,10 +1527,10 @@ td.num.bad {
 }
 .schedule-row {
   display: grid;
-  grid-template-columns: minmax(140px, 1fr) repeat(7, 44px) 72px;
+  grid-template-columns: minmax(140px, 1fr) repeat(7, 44px) 64px 72px;
   gap: 6px;
   align-items: center;
-  min-width: 520px;
+  min-width: 600px;
 }
 .schedule-head span {
   font-size: 12px;
@@ -1540,6 +1540,10 @@ td.num.bad {
 }
 .schedule-head span:first-child {
   text-align: left;
+}
+.group-days {
+  width: 64px;
+  text-align: center;
 }
 .shift-btn {
   padding: 7px 0;

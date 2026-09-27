@@ -197,6 +197,9 @@ Enséñalo en este orden:
 2. En **Equipo**, edita a una persona y ponle un horario **rotativo** (Tarde ⇄ Mañana).
    Enseña la **vista previa de las próximas semanas**:
    > *«Marco qué le toca esta semana y la aplicación calcula sola las siguientes.»*
+
+   Enseña también el **día de jornada partida** de esa persona (por ejemplo, el lunes) y cómo cambia en la vista previa.
+   Después asigna a alguien el horario **Sábados**: sus días de vacaciones pasan a **4** solos.
 3. En el **Calendario**, filtra una tienda:
    - cada día sale la letra del turno (M, T o P), y los días que no trabaja salen rayados;
    - la fila de la tienda muestra **dos números: mañana arriba y tarde abajo**. El mínimo se comprueba en cada turno:

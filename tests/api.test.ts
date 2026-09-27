@@ -123,7 +123,7 @@ describe('API', () => {
       { name: 'Rosa Turnos', schedule: { kind: 'rotativo', groupIds: ['manana', 'tarde'], start: '2026-08-05', everyWeeks: 1 } },
       true,
     );
-    expect(rota.data.schedule).toEqual({ kind: 'rotativo', groupIds: ['manana', 'tarde'], start: '2026-08-03', everyWeeks: 1 });
+    expect(rota.data.schedule).toEqual({ kind: 'rotativo', groupIds: ['manana', 'tarde'], start: '2026-08-03', everyWeeks: 1, splitDay: null });
 
     const tarde = await call<Employee>('POST', '/api/employees', { name: 'Toni Tardes', schedule: { kind: 'fijo', groupId: 'tarde' } }, true);
     const ask = (start: string, end: string, admin = false) =>
@@ -136,11 +136,17 @@ describe('API', () => {
     expect((await ask('2026-06-15', '2026-06-19')).status).toBe(200); // sin el sábado sí
     expect((await ask('2026-06-27', '2026-06-27', true)).status).toBe(200); // el responsable puede saltárselo
 
+    // Quien solo trabaja sábados tiene 4 días y no tiene límite de sábados.
+    const sab = await call<Employee>('POST', '/api/employees', { name: 'Sara Sábados', schedule: { kind: 'fijo', groupId: 'sabados' } }, true);
+    const sabReq = await call('POST', '/api/absences', { employeeId: sab.data.id, start: '2026-06-01', end: '2026-06-21', type: 'vacaciones' });
+    expect(sabReq.status).toBe(200);
+    expect((await call('POST', '/api/employees', { name: 'Y', schedule: { kind: 'fijo', groupId: 'manana', splitDay: 6 } }, true)).status).toBe(400);
+
     // Al borrar un horario, quien lo tenía se queda con el resto.
     const groups = state.settings.scheduleGroups.filter((g) => g.id !== 'tarde');
     expect((await call('PUT', '/api/settings', { scheduleGroups: groups }, true)).status).toBe(200);
     const after = (await call<DataState>('GET', '/api/state')).data;
-    expect(after.employees.find((e) => e.id === rota.data.id)?.schedule).toEqual({ kind: 'fijo', groupId: 'manana' });
+    expect(after.employees.find((e) => e.id === rota.data.id)?.schedule).toEqual({ kind: 'fijo', groupId: 'manana', splitDay: null });
     expect(after.employees.find((e) => e.id === tarde.data.id)?.schedule).toBeNull();
   });
 });

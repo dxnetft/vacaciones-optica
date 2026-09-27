@@ -1,8 +1,8 @@
 import { useMemo, useState } from 'react';
 import type { Employee, EmployeeSchedule, Store } from '../../shared/types.ts';
-import { WEEKDAYS_SHORT, addDays, dayRules, mondayOf, todayISO } from '../../shared/dates.ts';
-import { balanceFor } from '../../shared/stats.ts';
-import { currentRotationIndex, describeSchedule, rotationStartFor, workOn } from '../../shared/schedule.ts';
+import { WEEKDAYS_ES, WEEKDAYS_SHORT, addDays, dayRules, mondayOf, todayISO } from '../../shared/dates.ts';
+import { allowanceFor, balanceFor } from '../../shared/stats.ts';
+import { currentRotationIndex, describeSchedule, hasWeekdaySplit, rotationStartFor, workOn } from '../../shared/schedule.ts';
 import { api } from '../api.ts';
 import { useApp } from '../context.tsx';
 import { Avatar, Empty, Icon, Modal } from '../components/ui.tsx';
@@ -15,6 +15,7 @@ export function TeamView({ year, onYear }: { year: number; onYear: (y: number) =
   const [editStore, setEditStore] = useState<Partial<Store> | null>(null);
   const [showInactive, setShowInactive] = useState(false);
   const rules = useMemo(() => dayRules(state.settings), [state.settings]);
+  const saturdayColumn = state.settings.countMode === 'laborables' && state.settings.maxVacationSaturdays > 0;
 
   const storeName = (id: string | null) => state.stores.find((s) => s.id === id)?.name ?? 'Sin tienda';
   const people = [...state.employees]
@@ -93,7 +94,7 @@ export function TeamView({ year, onYear }: { year: number; onYear: (y: number) =
                 <th className="num">Días {year}</th>
                 <th className="num">Aprobados</th>
                 <th className="num">Pendientes</th>
-                {state.settings.countMode === 'laborables' && state.settings.maxVacationSaturdays > 0 && (
+                {saturdayColumn && (
                   <th className="num" title="Sábados de vacaciones gastados (incluye pendientes) sobre el máximo del año">
                     Sábados
                   </th>
@@ -124,9 +125,12 @@ export function TeamView({ year, onYear }: { year: number; onYear: (y: number) =
                     </td>
                     <td className="num">{b.used}</td>
                     <td className="num">{b.pending || '—'}</td>
-                    {b.maxSaturdays > 0 && (
-                      <td className={`num ${b.saturdaysUsed + b.saturdaysPending > b.maxSaturdays ? 'bad' : ''}`}>
-                        {b.saturdaysUsed + b.saturdaysPending}/{b.maxSaturdays}
+                    {saturdayColumn && (
+                      <td
+                        className={`num ${b.maxSaturdays && b.saturdaysUsed + b.saturdaysPending > b.maxSaturdays ? 'bad' : ''}`}
+                        title={b.maxSaturdays ? undefined : 'Sin límite de sábados'}
+                      >
+                        {b.maxSaturdays ? `${b.saturdaysUsed + b.saturdaysPending}/${b.maxSaturdays}` : '—'}
                       </td>
                     )}
                     <td>
@@ -231,10 +235,10 @@ function EmployeeModal({ value, onClose }: { value: Partial<Employee>; onClose: 
           min={0}
           max={366}
           value={form.annualDays}
-          placeholder={`Por defecto: ${state.settings.defaultAnnualDays}`}
+          placeholder={`Por defecto: ${allowanceFor({ annualDays: null, schedule }, state)}`}
           onChange={(e) => set('annualDays', e.target.value)}
         />
-        <small className="muted">Déjalo vacío para usar el valor general de Ajustes.</small>
+        <small className="muted">Déjalo vacío para usar el valor de su horario o el general de Ajustes.</small>
       </label>
       <ScheduleField value={schedule} onChange={setSchedule} />
       <div className="field">
@@ -302,17 +306,21 @@ function ScheduleField({ value, onChange }: { value: EmployeeSchedule | null; on
   const kind = value?.kind ?? 'none';
   const current = value?.kind === 'rotativo' ? currentRotationIndex(value, today) : 0;
 
+  const splitDay = value?.splitDay ?? null;
   const setKind = (k: string) => {
-    if (k === 'fijo') onChange({ kind: 'fijo', groupId: value?.kind === 'rotativo' ? value.groupIds[current] : groups[0].id });
+    if (k === 'fijo') onChange({ kind: 'fijo', groupId: value?.kind === 'rotativo' ? value.groupIds[current] : groups[0].id, splitDay });
     else if (k === 'rotativo') {
       const first = value?.kind === 'fijo' ? value.groupId : groups[0].id;
       const second = groups.find((g) => g.id !== first)?.id ?? first;
-      onChange({ kind: 'rotativo', groupIds: [first, second], start: mondayOf(today), everyWeeks: 1 });
+      onChange({ kind: 'rotativo', groupIds: [first, second], start: mondayOf(today), everyWeeks: 1, splitDay });
     } else onChange(null);
   };
-  // Al cambiar la rotación se mantiene qué posición toca esta semana.
-  const setRotation = (groupIds: string[], everyWeeks: number, index: number) =>
-    onChange({ kind: 'rotativo', groupIds, everyWeeks, start: rotationStartFor(today, Math.min(index, groupIds.length - 1), everyWeeks) });
+  // Los horarios rotativos cambian cada semana. Al cambiar la rotación se mantiene qué posición toca esta semana.
+  const setRotation = (groupIds: string[], index: number) =>
+    onChange({ kind: 'rotativo', groupIds, everyWeeks: 1, start: rotationStartFor(today, Math.min(index, groupIds.length - 1), 1), splitDay });
+  const assigned = value ? (value.kind === 'fijo' ? [value.groupId] : value.groupIds) : [];
+  const splitGroup = groups.find((g) => assigned.includes(g.id) && hasWeekdaySplit(g));
+  const defaultSplit = splitGroup ? [1, 2, 3, 4, 5].find((d) => splitGroup.days[d] === 'P') : undefined;
 
   if (!groups.length) {
     return (
@@ -343,7 +351,7 @@ function ScheduleField({ value, onChange }: { value: EmployeeSchedule | null; on
       </select>
 
       {value?.kind === 'fijo' && (
-        <select value={value.groupId} onChange={(e) => onChange({ kind: 'fijo', groupId: e.target.value })} aria-label="Horario fijo">
+        <select value={value.groupId} onChange={(e) => onChange({ kind: 'fijo', groupId: e.target.value, splitDay })} aria-label="Horario fijo">
           {groups.map((g) => (
             <option key={g.id} value={g.id}>
               {g.name}
@@ -361,13 +369,13 @@ function ScheduleField({ value, onChange }: { value: EmployeeSchedule | null; on
                   type="radio"
                   name="rotation-now"
                   checked={current === i}
-                  onChange={() => setRotation(value.groupIds, value.everyWeeks, i)}
+                  onChange={() => setRotation(value.groupIds, i)}
                 />
                 <span className="muted small">{current === i ? 'Esta semana' : `Turno ${i + 1}`}</span>
               </label>
               <select
                 value={id}
-                onChange={(e) => setRotation(value.groupIds.map((x, j) => (j === i ? e.target.value : x)), value.everyWeeks, current)}
+                onChange={(e) => setRotation(value.groupIds.map((x, j) => (j === i ? e.target.value : x)), current)}
                 aria-label={`Horario ${i + 1} de la rotación`}
               >
                 {groups.map((g) => (
@@ -381,7 +389,7 @@ function ScheduleField({ value, onChange }: { value: EmployeeSchedule | null; on
                   type="button"
                   className="icon-btn"
                   aria-label="Quitar de la rotación"
-                  onClick={() => setRotation(value.groupIds.filter((_, j) => j !== i), value.everyWeeks, current > i ? current - 1 : current)}
+                  onClick={() => setRotation(value.groupIds.filter((_, j) => j !== i), current > i ? current - 1 : current)}
                 >
                   <Icon name="x" size={14} />
                 </button>
@@ -389,27 +397,30 @@ function ScheduleField({ value, onChange }: { value: EmployeeSchedule | null; on
             </div>
           ))}
           <div className="inline-row">
-            <button
-              type="button"
-              className="small-btn"
-              onClick={() => setRotation([...value.groupIds, groups[0].id], value.everyWeeks, current)}
-            >
+            <button type="button" className="small-btn" onClick={() => setRotation([...value.groupIds, groups[0].id], current)}>
               <Icon name="plus" size={14} /> Añadir a la rotación
             </button>
-            <label className="inline-row small">
-              Cambia cada
-              <input
-                type="number"
-                min={1}
-                max={12}
-                className="tiny-input"
-                value={value.everyWeeks}
-                onChange={(e) => setRotation(value.groupIds, Math.min(12, Math.max(1, Number(e.target.value) || 1)), current)}
-              />
-              {value.everyWeeks === 1 ? 'semana' : 'semanas'}
-            </label>
+            <span className="muted small">Cambia de horario cada semana.</span>
           </div>
         </div>
+      )}
+
+      {value && splitGroup && defaultSplit !== undefined && (
+        <label className="inline-row small">
+          Día de jornada partida
+          <select
+            value={splitDay ?? ''}
+            onChange={(e) => onChange({ ...value, splitDay: e.target.value === '' ? null : Number(e.target.value) })}
+            aria-label="Día de jornada partida"
+          >
+            <option value="">{`El del horario (${WEEKDAYS_ES[defaultSplit].toLowerCase()})`}</option>
+            {[1, 2, 3, 4, 5].map((d) => (
+              <option key={d} value={d}>
+                {WEEKDAYS_ES[d]}
+              </option>
+            ))}
+          </select>
+        </label>
       )}
 
       {preview.length > 0 && (

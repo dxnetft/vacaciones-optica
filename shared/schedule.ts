@@ -12,11 +12,12 @@ export type WorkDay = Shift | 'dia' | null;
 
 export const DEFAULT_SCHEDULE_GROUPS: ScheduleGroup[] = [
   // De lunes a viernes de mañana, con un día de jornada partida. El sábado no se trabaja.
+  // Cada persona puede tener su propio día de partido (ver `splitDay`).
   { id: 'manana', name: 'Mañana', days: [null, 'M', 'M', 'P', 'M', 'M', null] },
-  // De lunes a viernes de tarde, y el sábado.
+  // De lunes a viernes de tarde, y el sábado (que siempre es jornada completa).
   { id: 'tarde', name: 'Tarde', days: [null, 'T', 'T', 'T', 'T', 'T', 'P'] },
-  // Solo los sábados.
-  { id: 'sabados', name: 'Sábados', days: [null, null, null, null, null, null, 'P'] },
+  // Solo los sábados, jornada completa. Quien hace todo el año de sábados tiene 4 días de vacaciones.
+  { id: 'sabados', name: 'Sábados', days: [null, null, null, null, null, null, 'P'], annualDays: 4 },
 ];
 
 /** Horario que le toca a la persona la semana de `day`, o `null` si no tiene. */
@@ -39,7 +40,27 @@ export function workOn(emp: Pick<Employee, 'schedule'>, day: ISODate, rules: Day
   if (rules.holidays.has(day)) return null;
   const g = groupOn(emp, day, rules);
   if (!g) return isWorkingDay(day, rules) ? 'dia' : null;
-  return g.days[weekday(day)] ?? null;
+  const wd = weekday(day);
+  const w = g.days[wd] ?? null;
+  // Día de partido propio de la persona: se mueve el partido del horario a su día.
+  const split = emp.schedule?.splitDay;
+  if (split && wd >= 1 && wd <= 5 && hasWeekdaySplit(g)) {
+    if (wd === split) return w ? 'P' : null;
+    if (w === 'P') return 'M';
+  }
+  return w;
+}
+
+/** Si el horario tiene algún día de jornada partida entre semana. */
+export function hasWeekdaySplit(g: ScheduleGroup): boolean {
+  return [1, 2, 3, 4, 5].some((d) => g.days[d] === 'P');
+}
+
+/** Horario fijo que solo trabaja los sábados (no se le aplica el límite de sábados de vacaciones). */
+export function onlySaturdays(emp: Pick<Employee, 'schedule'>, rules: DayRules): boolean {
+  const s = emp.schedule;
+  const g = s?.kind === 'fijo' ? rules.scheduleGroups.get(s.groupId) : undefined;
+  return !!g && g.days[6] !== null && g.days.every((d, i) => i === 6 || d === null);
 }
 
 export const coversMorning = (w: WorkDay) => w === 'M' || w === 'P' || w === 'dia';

@@ -107,9 +107,10 @@ export function createApp(db: Store) {
     if (!v || typeof v !== 'object') return null;
     const s = v as Record<string, unknown>;
     const exists = (id: unknown): id is string => typeof id === 'string' && db.data.settings.scheduleGroups.some((g) => g.id === id);
+    const splitDay = s.splitDay === null || s.splitDay === undefined || s.splitDay === '' ? null : int(s.splitDay, 'día de partido', 1, 5);
     if (s.kind === 'fijo') {
       if (!exists(s.groupId)) fail('El horario indicado no existe.');
-      return { kind: 'fijo', groupId: s.groupId };
+      return { kind: 'fijo', groupId: s.groupId, splitDay };
     }
     if (s.kind === 'rotativo') {
       if (!Array.isArray(s.groupIds) || s.groupIds.length < 2 || s.groupIds.length > 12 || !s.groupIds.every(exists)) {
@@ -120,6 +121,7 @@ export function createApp(db: Store) {
         groupIds: s.groupIds as string[],
         start: mondayOf(date(s.start, 'inicio de la rotación')),
         everyWeeks: s.everyWeeks === undefined ? 1 : int(s.everyWeeks, 'semanas de cada turno', 1, 12),
+        splitDay,
       };
     }
     return null;
@@ -243,7 +245,8 @@ export function createApp(db: Store) {
         if (!SHIFT_KEYS.includes(d as Shift)) fail('Turno no válido en un horario.');
         return d as Shift;
       });
-      return { id, name: str(g.name, 'nombre del horario', 60), days };
+      const annualDays = g.annualDays === null || g.annualDays === undefined || g.annualDays === '' ? null : int(g.annualDays, 'días de vacaciones del horario', 0, 366);
+      return { id, name: str(g.name, 'nombre del horario', 60), days, annualDays };
     });
   };
 
@@ -278,7 +281,7 @@ export function createApp(db: Store) {
       }
       const left = sc.groupIds.filter((id) => ids.has(id));
       if (left.length === sc.groupIds.length) continue;
-      e.schedule = left.length >= 2 ? { ...sc, groupIds: left } : left.length === 1 ? { kind: 'fijo', groupId: left[0] } : null;
+      e.schedule = left.length >= 2 ? { ...sc, groupIds: left } : left.length === 1 ? { kind: 'fijo', groupId: left[0], splitDay: sc.splitDay } : null;
     }
     if (typeof b.newPin === 'string') {
       if (!/^\d{4,8}$/.test(b.newPin)) fail('El PIN debe tener entre 4 y 8 cifras.');

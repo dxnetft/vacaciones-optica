@@ -58,6 +58,8 @@ export class Store {
       const loaded = JSON.parse(fs.readFileSync(this.file, 'utf8')) as Partial<DB>;
       const base = emptyDB();
       this.data = { ...base, ...loaded, settings: { ...base.settings, ...loaded.settings } } as DB;
+      // Datos guardados antes de que los horarios tuvieran días de vacaciones propios.
+      for (const g of this.data.settings.scheduleGroups) if (g.id === 'sabados' && g.annualDays === undefined) g.annualDays = 4;
     } else {
       this.data = emptyDB();
       this.save();

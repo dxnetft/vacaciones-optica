@@ -19,12 +19,14 @@ empezar a usarse importando ese mismo Excel tal cual**, sin tener que rehacer na
   contados en días laborables o naturales. Los domingos y festivos no cuentan.
 - **Horarios y turnos**: se definen horarios semanales con turno de mañana, tarde o partido
   para cada día (vienen creados «Mañana», «Tarde» y «Sábados») y se asignan a cada persona,
-  fijos o rotativos (por ejemplo, una semana de mañana y otra de tarde). El calendario muestra
+  fijos o rotativos (cambian cada semana; por ejemplo, una de mañana y otra de tarde). Cada
+  persona puede tener su propio día de jornada partida. El calendario muestra
   el turno de cada día, las vacaciones solo descuentan los días que a cada uno le toca trabajar
   y la cobertura mínima se comprueba por separado en la mañana y en la tarde.
 - **Límite de sábados**: de los días de vacaciones, solo un número pueden ser sábado (2 por
   defecto). Cuando alguien los ha gastado, no puede pedir más sábados ese año; el responsable
-  sí puede hacer excepciones.
+  sí puede hacer excepciones. Quien solo trabaja sábados tiene sus propios días de vacaciones
+  (4 por defecto, según el horario) y no tiene ese límite.
 - **Vista anual**: mapa de calor para ver de un vistazo cómo queda repartido el verano o la
   Navidad, del equipo entero, de una tienda o de una persona.
 - **Festivos**: los nacionales se añaden con un clic; los autonómicos y locales, a mano.

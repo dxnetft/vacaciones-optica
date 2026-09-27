@@ -129,6 +129,7 @@ export function SettingsView() {
 
           <ScheduleGroupsCard
             groups={form.scheduleGroups}
+            defaultDays={form.defaultAnnualDays}
             onChange={(g) => set('scheduleGroups', g)}
             inUse={(id) =>
               state.employees.filter(
@@ -248,13 +249,16 @@ export function SettingsView() {
 }
 
 const SHIFT_CYCLE: (Shift | null)[] = [null, 'M', 'T', 'P'];
+const SATURDAY_CYCLE: (Shift | null)[] = [null, 'P'];
 
 function ScheduleGroupsCard({
   groups,
+  defaultDays,
   onChange,
   inUse,
 }: {
   groups: ScheduleGroup[];
+  defaultDays: number;
   onChange: (g: ScheduleGroup[]) => void;
   inUse: (id: string) => number;
 }) {
@@ -278,8 +282,8 @@ function ScheduleGroupsCard({
       <p className="muted small">
         Define los horarios de la tienda y asígnalos a cada persona en <b>Equipo</b> (fijo o rotativo). Pulsa cada día para cambiar el
         turno: <span className="shift-tag">—</span> libre, <span className="shift-tag shift-M">M</span> mañana,{' '}
-        <span className="shift-tag shift-T">T</span> tarde y <span className="shift-tag shift-P">P</span> partido. Las vacaciones solo
-        cuentan los días que a cada uno le toca trabajar.
+        <span className="shift-tag shift-T">T</span> tarde y <span className="shift-tag shift-P">P</span> partido (el sábado siempre es
+        jornada completa). Las vacaciones solo cuentan los días que a cada uno le toca trabajar.
       </p>
       {groups.length === 0 ? (
         <p className="muted small">No hay horarios: todo el equipo trabaja los días generales de arriba.</p>
@@ -290,6 +294,7 @@ function ScheduleGroupsCard({
             {WEEK_ORDER.map((d) => (
               <span key={d}>{WEEKDAYS_ES[d].slice(0, 3)}</span>
             ))}
+            <span title="Días de vacaciones al año de quien tiene este horario fijo">Vacac.</span>
             <span />
           </div>
           {groups.map((g, i) => (
@@ -304,7 +309,9 @@ function ScheduleGroupsCard({
                     className={`shift-btn ${v ? `shift-${v}` : ''}`}
                     title={`${WEEKDAYS_ES[d]}: ${v ? SHIFTS[v].label : 'libre'}`}
                     onClick={() => {
-                      const next = SHIFT_CYCLE[(SHIFT_CYCLE.indexOf(v) + 1) % SHIFT_CYCLE.length];
+                      // El sábado siempre es jornada completa: solo libre o partido.
+                      const cycle = d === 6 ? SATURDAY_CYCLE : SHIFT_CYCLE;
+                      const next = cycle[(cycle.indexOf(v) + 1) % cycle.length];
                       update(i, { ...g, days: g.days.map((x, j) => (j === d ? next : x)) });
                     }}
                   >
@@ -312,6 +319,17 @@ function ScheduleGroupsCard({
                   </button>
                 );
               })}
+              <input
+                type="number"
+                min={0}
+                max={366}
+                className="group-days"
+                value={g.annualDays ?? ''}
+                placeholder={String(defaultDays)}
+                title="Días de vacaciones al año de quien tiene este horario fijo. Vacío = el valor general."
+                aria-label={`Días de vacaciones de ${g.name}`}
+                onChange={(e) => update(i, { ...g, annualDays: e.target.value === '' ? null : Number(e.target.value) })}
+              />
               <div className="row-actions">
                 <button
                   className="icon-btn"
@@ -330,8 +348,9 @@ function ScheduleGroupsCard({
         </div>
       )}
       <p className="muted small">
-        Consejo: si en el turno de mañana cada persona hace la jornada partida un día distinto, duplica el horario («Mañana · partido
-        lunes», «Mañana · partido martes»…).
+        El día de jornada partida de cada persona se elige en su ficha, en <b>Equipo</b>. La columna «Vacac.» son los días de
+        vacaciones al año de quien tiene ese horario fijo (vacío = los {defaultDays} generales); por ejemplo, 4 para quien hace todo
+        el año de sábados. A quien solo trabaja sábados no se le aplica el límite de sábados.
       </p>
     </section>
   );

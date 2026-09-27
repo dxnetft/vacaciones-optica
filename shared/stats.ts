@@ -2,7 +2,7 @@ import { ABSENCE_TYPES } from './types.ts';
 import type { Absence, DataState, Employee, ISODate, Store } from './types.ts';
 import { addDays, clampRange, dayRules, diffDays, isWorkingDay, overlaps, weekday } from './dates.ts';
 import type { DayRules } from './dates.ts';
-import { coversAfternoon, coversMorning, hasSchedule, workOn } from './schedule.ts';
+import { coversAfternoon, coversMorning, hasSchedule, onlySaturdays, workOn } from './schedule.ts';
 import type { WorkDay } from './schedule.ts';
 
 /**
@@ -37,9 +37,13 @@ export function workedSaturdays(emp: Pick<Employee, 'schedule'>, start: ISODate,
   return out;
 }
 
-/** Si en el modo actual tiene sentido el límite de sábados de vacaciones. */
-export function saturdayLimit(settings: DataState['settings']): number {
-  return settings.countMode === 'laborables' ? (settings.maxVacationSaturdays ?? 0) : 0;
+/**
+ * Máximo de sábados de vacaciones al año para una persona (0 = sin límite). Solo tiene sentido
+ * contando días laborables, y no se aplica a quien solo trabaja los sábados.
+ */
+export function saturdayLimit(emp: Pick<Employee, 'schedule'>, settings: DataState['settings'], rules: DayRules): number {
+  if (settings.countMode !== 'laborables' || onlySaturdays(emp, rules)) return 0;
+  return settings.maxVacationSaturdays ?? 0;
 }
 
 export interface Balance {
@@ -56,8 +60,12 @@ export interface Balance {
   maxSaturdays: number;
 }
 
-export function allowanceFor(emp: Employee, state: Pick<DataState, 'settings'>): number {
-  return emp.annualDays ?? state.settings.defaultAnnualDays;
+/** Días de vacaciones al año: los de la persona, los de su horario fijo o el valor general. */
+export function allowanceFor(emp: Pick<Employee, 'annualDays' | 'schedule'>, state: Pick<DataState, 'settings'>): number {
+  if (emp.annualDays !== null && emp.annualDays !== undefined) return emp.annualDays;
+  const s = emp.schedule;
+  const g = s?.kind === 'fijo' ? state.settings.scheduleGroups?.find((x) => x.id === s.groupId) : undefined;
+  return g?.annualDays ?? state.settings.defaultAnnualDays;
 }
 
 export function balanceFor(emp: Employee, year: number, state: DataState, rules = dayRules(state.settings)): Balance {
@@ -95,7 +103,7 @@ export function balanceFor(emp: Employee, year: number, state: DataState, rules 
     otherDays,
     saturdaysUsed,
     saturdaysPending,
-    maxSaturdays: saturdayLimit(state.settings),
+    maxSaturdays: saturdayLimit(emp, state.settings, rules),
   };
 }
 
@@ -257,7 +265,7 @@ export function checkRequest(
   }
   let saturdays = 0;
   const saturdaysOver: RequestCheck['saturdaysOver'] = [];
-  const max = saturdayLimit(state.settings);
+  const max = emp ? saturdayLimit(emp, state.settings, rules) : 0;
   if (emp && ABSENCE_TYPES[req.type ?? 'vacaciones'].countsAgainstBalance && req.end <= addDays(req.start, 400)) {
     const scoped: DataState = { ...state, absences: others };
     for (const [year, n] of workedSaturdays(emp, req.start, req.end, rules)) {

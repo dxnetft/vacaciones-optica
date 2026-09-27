@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { countDays, dayRules, easterSunday, parseLooseDate, spanishNationalHolidays } from '../shared/dates.ts';
-import { balanceFor, checkRequest, countDaysFor, coverageFor } from '../shared/stats.ts';
+import { allowanceFor, balanceFor, checkRequest, countDaysFor, coverageFor } from '../shared/stats.ts';
 import { DEFAULT_SCHEDULE_GROUPS, currentRotationIndex, rotationStartFor, workOn } from '../shared/schedule.ts';
 import type { DataState } from '../shared/types.ts';
 
@@ -140,6 +140,27 @@ describe('horarios y turnos', () => {
     expect(checkRequest(shifts, { employeeId: 'm', start: '2026-08-24', end: '2026-08-30' }).saturdays).toBe(0);
     // Al editar una solicitud no se cuenta dos veces.
     expect(checkRequest(shifts, { employeeId: 't', start: '2026-07-13', end: '2026-07-18', ignoreId: 'v2' }).saturdaysOver).toEqual([]);
+  });
+
+  it('cada persona puede tener su propio día de partido', () => {
+    const lunes = { schedule: { kind: 'fijo' as const, groupId: 'manana', splitDay: 1 } };
+    expect(workOn(lunes, '2026-08-03', rules)).toBe('P'); // lunes
+    expect(workOn(lunes, '2026-08-05', rules)).toBe('M'); // el miércoles del horario pasa a mañana
+    expect(workOn(lunes, '2026-08-08', rules)).toBeNull(); // el sábado sigue libre
+    // En las semanas de tarde de una rotación no hay partido entre semana.
+    const rota = { schedule: { ...r.schedule!, splitDay: 1 } };
+    expect(workOn(rota, '2026-08-10', rules)).toBe('T');
+    expect(workOn(rota, '2026-08-17', rules)).toBe('P');
+  });
+
+  it('quien solo trabaja sábados tiene sus propios días y no tiene límite de sábados', () => {
+    expect(allowanceFor(sa, shifts)).toBe(4);
+    expect(allowanceFor({ ...sa, annualDays: 2 }, shifts)).toBe(2);
+    expect(allowanceFor(t, shifts)).toBe(23);
+    const check = checkRequest(shifts, { employeeId: 'sa', start: '2026-06-01', end: '2026-06-30' });
+    expect(check.saturdays).toBe(4);
+    expect(check.saturdaysOver).toEqual([]);
+    expect(balanceFor(sa, 2026, shifts).maxSaturdays).toBe(0);
   });
 
   it('comprueba la cobertura de mañana y de tarde por separado', () => {

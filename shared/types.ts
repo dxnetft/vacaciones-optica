@@ -45,13 +45,15 @@ export interface ScheduleGroup {
   name: string;
   /** Turno de cada día de la semana (0 = domingo … 6 = sábado). `null` = ese día no trabaja. */
   days: (Shift | null)[];
+  /** Días de vacaciones al año de quien tiene este horario fijo. `null` o ausente = el valor general. */
+  annualDays?: number | null;
 }
 
 /**
  * Horario de una persona: siempre el mismo o rotativo (va pasando por varios horarios,
  * cambiando cada `everyWeeks` semanas).
  */
-export type EmployeeSchedule =
+export type EmployeeSchedule = (
   | { kind: 'fijo'; groupId: string }
   | {
       kind: 'rotativo';
@@ -59,7 +61,14 @@ export type EmployeeSchedule =
       /** Un lunes en el que empieza el primer horario de la lista. */
       start: ISODate;
       everyWeeks: number;
-    };
+    }
+) & {
+  /**
+   * Día de la semana en que esta persona hace la jornada partida (1 = lunes … 5 = viernes),
+   * en las semanas en que su horario tiene un día partido entre semana. `null` = el del horario.
+   */
+  splitDay?: number | null;
+};
 
 export interface Store {
   id: string;
