@@ -36,7 +36,18 @@ function rotationIndex(s: Extract<EmployeeSchedule, { kind: 'rotativo' }>, day: 
   return ((period % n) + n) % n;
 }
 
-export function workOn(emp: Pick<Employee, 'schedule'>, day: ISODate, rules: DayRules): WorkDay {
+/** Lo que hace falta de una persona para saber qué días trabaja. */
+export type WorkPattern = Pick<Employee, 'schedule' | 'shiftOverrides'>;
+
+export function workOn(emp: WorkPattern, day: ISODate, rules: DayRules): WorkDay {
+  if (rules.holidays.has(day)) return null;
+  // Un cambio manual de ese día manda sobre el horario.
+  if (emp.shiftOverrides && day in emp.shiftOverrides) return emp.shiftOverrides[day];
+  return scheduledOn(emp, day, rules);
+}
+
+/** Lo que le toca según su horario, sin tener en cuenta los cambios manuales. */
+export function scheduledOn(emp: Pick<Employee, 'schedule'>, day: ISODate, rules: DayRules): WorkDay {
   if (rules.holidays.has(day)) return null;
   const g = groupOn(emp, day, rules);
   if (!g) return isWorkingDay(day, rules) ? 'dia' : null;

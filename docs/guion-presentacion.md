@@ -195,8 +195,11 @@ Enséñalo en este orden:
    - **Sábados**: solo los sábados.
    > *«Cada día se cambia con un clic, y se pueden crear o duplicar todos los horarios que haga falta.»*
 2. En **Equipo**, edita a una persona y ponle un horario **rotativo** (Tarde ⇄ Mañana).
-   Enseña la **vista previa de las próximas semanas**:
+   Enseña la **vista previa de esta semana y la próxima**:
    > *«Marco qué le toca esta semana y la aplicación calcula sola las siguientes.»*
+
+   Haz clic en un día de la vista previa (por ejemplo, el lunes) para cambiarlo de mañana a tarde:
+   > *«Si un día concreto alguien cambia el turno, se toca aquí con un clic, sin tocar su horario. Queda marcado con un punto.»*
 
    Enseña también el **día de jornada partida** de esa persona (por ejemplo, el lunes) y cómo cambia en la vista previa.
    Después asigna a alguien el horario **Sábados**: sus días de vacaciones pasan a **4** solos.
@@ -311,7 +314,7 @@ Después **calla y deja que hable**. Apunta todo lo que pida: son las mejoras de
 
 **Horarios y turnos**
 - [ ] Horarios semanales con turno de mañana, tarde o partido por día, que se pueden crear, duplicar y borrar.
-- [ ] Horario fijo o rotativo por persona (cada 1 o más semanas), con vista previa.
+- [ ] Horario fijo o rotativo por persona (cambia cada semana), con vista previa de 2 semanas y cambios a mano por día.
 - [ ] Letra del turno en el calendario y días de descanso rayados.
 - [ ] Cobertura mínima por turno (mañana y tarde).
 - [ ] Las vacaciones solo descuentan los días que a esa persona le toca trabajar.

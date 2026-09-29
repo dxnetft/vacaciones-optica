@@ -1751,3 +1751,34 @@ td.num.bad {
     font-size: 20px;
   }
 }
+
+/* Vista previa del horario en la ficha: cada día se puede cambiar a mano. */
+.sp-day {
+  background: var(--surface);
+  color: inherit;
+}
+.sp-row button.sp-day {
+  font: inherit;
+  font-weight: 700;
+  font-size: 11px;
+  cursor: pointer;
+  position: relative;
+}
+.sp-row button.sp-day:hover {
+  outline: 2px solid var(--brand);
+}
+.sp-row .sp-day.changed::after {
+  content: '';
+  position: absolute;
+  top: -3px;
+  right: -3px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 1px solid var(--bg, #fff);
+}
+.sp-row .sp-holiday {
+  color: var(--muted);
+  border-style: dashed;
+}

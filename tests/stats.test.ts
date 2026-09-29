@@ -153,6 +153,16 @@ describe('horarios y turnos', () => {
     expect(workOn(rota, '2026-08-17', rules)).toBe('P');
   });
 
+  it('los cambios manuales de un día mandan sobre el horario', () => {
+    const cambiada = { ...m, shiftOverrides: { '2026-08-03': 'T' as const, '2026-08-04': null, '2026-08-08': 'P' as const, '2026-08-15': 'M' as const } };
+    expect(workOn(cambiada, '2026-08-03', rules)).toBe('T');
+    expect(workOn(cambiada, '2026-08-04', rules)).toBeNull(); // ese día libra
+    expect(workOn(cambiada, '2026-08-08', rules)).toBe('P'); // sábado que normalmente libra
+    expect(workOn(cambiada, '2026-08-15', rules)).toBeNull(); // en festivo no se trabaja
+    expect(workOn(cambiada, '2026-08-05', rules)).toBe('P'); // el resto sigue el horario
+    expect(countDaysFor(cambiada, '2026-08-03', '2026-08-09', 'laborables', rules)).toBe(5);
+  });
+
   it('quien solo trabaja sábados tiene sus propios días y no tiene límite de sábados', () => {
     expect(allowanceFor(sa, shifts)).toBe(4);
     expect(allowanceFor({ ...sa, annualDays: 2 }, shifts)).toBe(2);

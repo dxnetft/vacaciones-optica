@@ -141,6 +141,10 @@ describe('API', () => {
     const sabReq = await call('POST', '/api/absences', { employeeId: sab.data.id, start: '2026-06-01', end: '2026-06-21', type: 'vacaciones' });
     expect(sabReq.status).toBe(200);
     expect((await call('POST', '/api/employees', { name: 'Y', schedule: { kind: 'fijo', groupId: 'manana', splitDay: 6 } }, true)).status).toBe(400);
+    const cambios = await call<Employee>('PUT', `/api/employees/${tarde.data.id}`, { name: 'Toni Tardes', schedule: { kind: 'fijo', groupId: 'tarde' }, shiftOverrides: { '2026-08-03': 'M', '2026-08-04': null } }, true);
+    expect(cambios.data.shiftOverrides).toEqual({ '2026-08-03': 'M', '2026-08-04': null });
+    expect((await call('PUT', `/api/employees/${tarde.data.id}`, { name: 'Toni Tardes', shiftOverrides: { '2026-08-03': 'X' } }, true)).status).toBe(400);
+    expect((await call('PUT', `/api/employees/${tarde.data.id}`, { name: 'Toni Tardes', shiftOverrides: { 'mañana': 'M' } }, true)).status).toBe(400);
 
     // Al borrar un horario, quien lo tenía se queda con el resto.
     const groups = state.settings.scheduleGroups.filter((g) => g.id !== 'tarde');

@@ -90,6 +90,11 @@ export interface Employee {
   active: boolean;
   /** `null` o ausente = sin horario: trabaja los días laborables generales de Ajustes. */
   schedule?: EmployeeSchedule | null;
+  /**
+   * Cambios manuales de un día concreto que mandan sobre el horario: el turno que hace ese día
+   * o `null` si ese día libra. Los pone el responsable desde la ficha de la persona.
+   */
+  shiftOverrides?: Record<ISODate, Shift | null>;
 }
 
 export interface Absence {

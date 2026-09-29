@@ -226,14 +226,15 @@ export function CalendarView({ year, month, onChange }: { year: number; month: n
                         </span>
                       </div>
                       {days.map((d, i) => {
-                        const w = schedule ? workOn(e, d, rules) : undefined;
+                        const w = schedule || e.shiftOverrides ? workOn(e, d, rules) : undefined;
                         const rest = w === null && isWorkingDay(d, rules);
+                        const manual = !!e.shiftOverrides && d in e.shiftOverrides ? ' (cambiado a mano)' : '';
                         return (
                           <div
                             key={d}
                             className={`tl-cell ${dayClass(d)} ${rest ? 'rest' : ''} ${selRange && i >= selRange[0] && i <= selRange[1] ? 'selecting' : ''}`}
                             style={{ gridColumn: i + 2 }}
-                            title={w && w !== 'dia' ? `Turno de ${SHIFTS[w].label.toLowerCase()}` : rest ? 'No trabaja este día' : undefined}
+                            title={w && w !== 'dia' ? `Turno de ${SHIFTS[w].label.toLowerCase()}${manual}` : rest ? `No trabaja este día${manual}` : undefined}
                             onMouseDown={(ev) => {
                               if (ev.button !== 0) return;
                               ev.preventDefault();

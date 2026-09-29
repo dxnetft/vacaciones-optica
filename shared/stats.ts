@@ -3,14 +3,14 @@ import type { Absence, DataState, Employee, ISODate, Store } from './types.ts';
 import { addDays, clampRange, dayRules, diffDays, isWorkingDay, overlaps, weekday } from './dates.ts';
 import type { DayRules } from './dates.ts';
 import { coversAfternoon, coversMorning, hasSchedule, onlySaturdays, workOn } from './schedule.ts';
-import type { WorkDay } from './schedule.ts';
+import type { WorkDay, WorkPattern } from './schedule.ts';
 
 /**
  * Días que consume un periodo para una persona. En modo laborable solo cuentan los días que
  * le toca trabajar según su horario (o los días laborables generales si no tiene horario).
  */
 export function countDaysFor(
-  emp: Pick<Employee, 'schedule'>,
+  emp: WorkPattern,
   start: ISODate,
   end: ISODate,
   mode: DataState['settings']['countMode'],
@@ -24,7 +24,7 @@ export function countDaysFor(
 }
 
 /** Sábados que le tocaba trabajar dentro del periodo, agrupados por año. */
-export function workedSaturdays(emp: Pick<Employee, 'schedule'>, start: ISODate, end: ISODate, rules: DayRules): Map<number, number> {
+export function workedSaturdays(emp: WorkPattern, start: ISODate, end: ISODate, rules: DayRules): Map<number, number> {
   const out = new Map<number, number>();
   if (end < start) return out;
   // Avanza hasta el primer sábado y luego de semana en semana.
@@ -41,7 +41,7 @@ export function workedSaturdays(emp: Pick<Employee, 'schedule'>, start: ISODate,
  * Máximo de sábados de vacaciones al año para una persona (0 = sin límite). Solo tiene sentido
  * contando días laborables, y no se aplica a quien solo trabaja los sábados.
  */
-export function saturdayLimit(emp: Pick<Employee, 'schedule'>, settings: DataState['settings'], rules: DayRules): number {
+export function saturdayLimit(emp: WorkPattern, settings: DataState['settings'], rules: DayRules): number {
   if (settings.countMode !== 'laborables' || onlySaturdays(emp, rules)) return 0;
   return settings.maxVacationSaturdays ?? 0;
 }
