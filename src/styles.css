@@ -576,9 +576,32 @@ textarea {
   border-right: 1px solid var(--border);
   min-width: 0;
 }
-.tl-head {
+.tl-weeks {
   position: sticky;
   top: 0;
+  z-index: 4;
+  min-height: 24px;
+  border-bottom: 1px solid var(--border);
+}
+.tl-week {
+  display: grid;
+  place-items: center;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+  background: var(--surface-2);
+  white-space: nowrap;
+  overflow: hidden;
+}
+.tl-week.week-start {
+  box-shadow: inset 1px 0 0 var(--border-strong);
+}
+.tl-weeks .tl-name {
+  background: var(--surface-2);
+}
+.tl-head {
+  position: sticky;
+  top: 24px;
   z-index: 4;
   border-bottom: 1px solid var(--border);
   min-height: 48px;
@@ -1742,4 +1765,35 @@ td.num.bad {
     min-width: 0;
     font-size: 20px;
   }
+}
+
+/* Vista previa del horario en la ficha: cada día se puede cambiar a mano. */
+.sp-day {
+  background: var(--surface);
+  color: inherit;
+}
+.sp-row button.sp-day {
+  font: inherit;
+  font-weight: 700;
+  font-size: 11px;
+  cursor: pointer;
+  position: relative;
+}
+.sp-row button.sp-day:hover {
+  outline: 2px solid var(--brand);
+}
+.sp-row .sp-day.changed::after {
+  content: '';
+  position: absolute;
+  top: -3px;
+  right: -3px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 1px solid var(--bg, #fff);
+}
+.sp-row .sp-holiday {
+  color: var(--muted);
+  border-style: dashed;
 }

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ABSENCE_TYPES, SHIFTS } from '../../shared/types.ts';
 import type { Absence, Employee, ISODate } from '../../shared/types.ts';
-import { MONTHS_ES, WEEKDAYS_SHORT, dayRules, formatRange, isWorkingDay, monthDays, normalizeText, todayISO, weekday } from '../../shared/dates.ts';
+import { MONTHS_ES, WEEKDAYS_SHORT, dayRules, formatRange, isWorkingDay, monthDays, normalizeText, todayISO, weekOfYear, weekday } from '../../shared/dates.ts';
 import { absencesByEmployee, balanceFor, countDaysFor, coverageFor } from '../../shared/stats.ts';
 import { describeSchedule, hasSchedule, workOn } from '../../shared/schedule.ts';
 import { useApp } from '../context.tsx';
@@ -23,6 +23,16 @@ export function CalendarView({ year, month, onChange }: { year: number; month: n
   const [sel, setSel] = useState<Selection | null>(null);
 
   const days = useMemo(() => monthDays(year, month), [year, month]);
+  // Tramos de semana dentro del mes, para la fila con el número de semana.
+  const weeks = useMemo(() => {
+    const out: { n: number; from: number; to: number }[] = [];
+    days.forEach((d, i) => {
+      const n = weekOfYear(d);
+      if (out.length && out[out.length - 1].n === n) out[out.length - 1].to = i;
+      else out.push({ n, from: i, to: i });
+    });
+    return out;
+  }, [days]);
   const rules = useMemo(() => dayRules(state.settings), [state.settings]);
   const holidayNames = useMemo(() => new Map(state.settings.holidays.map((h) => [h.date, h.name])), [state.settings.holidays]);
   const byEmp = useMemo(() => absencesByEmployee(state.absences), [state.absences]);
@@ -168,6 +178,19 @@ export function CalendarView({ year, month, onChange }: { year: number; month: n
       ) : (
         <div className="timeline-wrap">
           <div className="timeline" style={{ '--days': days.length } as React.CSSProperties}>
+            <div className="tl-row tl-weeks">
+              <div className="tl-name" />
+              {weeks.map((w) => (
+                <div
+                  key={w.n}
+                  className={`tl-week ${w.from > 0 ? 'week-start' : ''}`}
+                  style={{ gridColumn: `${w.from + 2} / ${w.to + 3}` }}
+                  title={`Semana ${w.n} del año`}
+                >
+                  {w.to - w.from >= 2 ? `Semana ${w.n}` : `S${w.n}`}
+                </div>
+              ))}
+            </div>
             <div className="tl-row tl-head">
               <div className="tl-name">Equipo</div>
               {days.map((d) => (
@@ -226,14 +249,15 @@ export function CalendarView({ year, month, onChange }: { year: number; month: n
                         </span>
                       </div>
                       {days.map((d, i) => {
-                        const w = schedule ? workOn(e, d, rules) : undefined;
+                        const w = schedule || e.shiftOverrides ? workOn(e, d, rules) : undefined;
                         const rest = w === null && isWorkingDay(d, rules);
+                        const manual = !!e.shiftOverrides && d in e.shiftOverrides ? ' (cambiado a mano)' : '';
                         return (
                           <div
                             key={d}
                             className={`tl-cell ${dayClass(d)} ${rest ? 'rest' : ''} ${selRange && i >= selRange[0] && i <= selRange[1] ? 'selecting' : ''}`}
                             style={{ gridColumn: i + 2 }}
-                            title={w && w !== 'dia' ? `Turno de ${SHIFTS[w].label.toLowerCase()}` : rest ? 'No trabaja este día' : undefined}
+                            title={w && w !== 'dia' ? `Turno de ${SHIFTS[w].label.toLowerCase()}${manual}` : rest ? `No trabaja este día${manual}` : undefined}
                             onMouseDown={(ev) => {
                               if (ev.button !== 0) return;
                               ev.preventDefault();

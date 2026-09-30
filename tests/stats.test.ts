@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { countDays, dayRules, easterSunday, parseLooseDate, spanishNationalHolidays } from '../shared/dates.ts';
+import { countDays, dayRules, easterSunday, parseLooseDate, spanishNationalHolidays, weekOfYear } from '../shared/dates.ts';
 import { allowanceFor, balanceFor, checkRequest, countDaysFor, coverageFor } from '../shared/stats.ts';
 import { DEFAULT_SCHEDULE_GROUPS, currentRotationIndex, rotationStartFor, workOn } from '../shared/schedule.ts';
 import type { DataState } from '../shared/types.ts';
@@ -153,6 +153,16 @@ describe('horarios y turnos', () => {
     expect(workOn(rota, '2026-08-17', rules)).toBe('P');
   });
 
+  it('los cambios manuales de un día mandan sobre el horario', () => {
+    const cambiada = { ...m, shiftOverrides: { '2026-08-03': 'T' as const, '2026-08-04': null, '2026-08-08': 'P' as const, '2026-08-15': 'M' as const } };
+    expect(workOn(cambiada, '2026-08-03', rules)).toBe('T');
+    expect(workOn(cambiada, '2026-08-04', rules)).toBeNull(); // ese día libra
+    expect(workOn(cambiada, '2026-08-08', rules)).toBe('P'); // sábado que normalmente libra
+    expect(workOn(cambiada, '2026-08-15', rules)).toBeNull(); // en festivo no se trabaja
+    expect(workOn(cambiada, '2026-08-05', rules)).toBe('P'); // el resto sigue el horario
+    expect(countDaysFor(cambiada, '2026-08-03', '2026-08-09', 'laborables', rules)).toBe(5);
+  });
+
   it('quien solo trabaja sábados tiene sus propios días y no tiene límite de sábados', () => {
     expect(allowanceFor(sa, shifts)).toBe(4);
     expect(allowanceFor({ ...sa, annualDays: 2 }, shifts)).toBe(2);
@@ -170,5 +180,16 @@ describe('horarios y turnos', () => {
     const check = checkRequest(shifts, { employeeId: 't', start: '2026-08-03', end: '2026-08-04' });
     expect(check.breachDays).toEqual(['2026-08-03', '2026-08-04']); // la tarde se queda vacía
     expect(checkRequest(shifts, { employeeId: 'm', start: '2026-08-03', end: '2026-08-03' }).breachDays).toEqual([]);
+  });
+});
+
+describe('número de semana', () => {
+  it('la semana del 1 de enero es la 1', () => {
+    expect(weekOfYear('2026-01-01')).toBe(1); // jueves
+    expect(weekOfYear('2026-01-04')).toBe(1); // domingo
+    expect(weekOfYear('2026-01-05')).toBe(2); // lunes
+    expect(weekOfYear('2027-01-01')).toBe(1); // viernes
+    expect(weekOfYear('2026-09-29')).toBe(40);
+    expect(weekOfYear('2026-12-31')).toBe(53);
   });
 });

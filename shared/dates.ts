@@ -128,6 +128,15 @@ export function mondayOf(iso: ISODate): ISODate {
   return addDays(iso, -((weekday(iso) + 6) % 7));
 }
 
+/**
+ * Número de semana del año, con semanas de lunes a domingo: la semana en la que cae el 1 de
+ * enero es la semana 1, la siguiente la 2, etc. Los últimos días de diciembre pueden quedar en la
+ * semana 53 aunque esa misma semana sea la 1 del año siguiente.
+ */
+export function weekOfYear(iso: ISODate): number {
+  return Math.floor(diffDays(mondayOf(`${iso.slice(0, 4)}-01-01`), mondayOf(iso)) / 7) + 1;
+}
+
 export function isWorkingDay(iso: ISODate, rules: DayRules): boolean {
   return rules.workingWeekdays.includes(weekday(iso)) && !rules.holidays.has(iso);
 }

@@ -20,7 +20,8 @@ empezar a usarse importando ese mismo Excel tal cual**, sin tener que rehacer na
 - **Horarios y turnos**: se definen horarios semanales con turno de mañana, tarde o partido
   para cada día (vienen creados «Mañana», «Tarde» y «Sábados») y se asignan a cada persona,
   fijos o rotativos (cambian cada semana; por ejemplo, una de mañana y otra de tarde). Cada
-  persona puede tener su propio día de jornada partida. El calendario muestra
+  persona puede tener su propio día de jornada partida, y en su ficha el responsable puede
+  cambiar a mano cualquier día de esta semana o la próxima con un clic. El calendario muestra
   el turno de cada día, las vacaciones solo descuentan los días que a cada uno le toca trabajar
   y la cobertura mínima se comprueba por separado en la mañana y en la tarde.
 - **Límite de sábados**: de los días de vacaciones, solo un número pueden ser sábado (2 por

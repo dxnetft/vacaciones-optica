@@ -1,8 +1,9 @@
 import { useMemo, useState } from 'react';
-import type { Employee, EmployeeSchedule, Store } from '../../shared/types.ts';
-import { WEEKDAYS_ES, WEEKDAYS_SHORT, addDays, dayRules, mondayOf, todayISO } from '../../shared/dates.ts';
+import { SHIFTS } from '../../shared/types.ts';
+import type { Employee, EmployeeSchedule, Shift, Store } from '../../shared/types.ts';
+import { WEEKDAYS_ES, WEEKDAYS_SHORT, addDays, dayRules, mondayOf, todayISO, weekday } from '../../shared/dates.ts';
 import { allowanceFor, balanceFor } from '../../shared/stats.ts';
-import { currentRotationIndex, describeSchedule, hasWeekdaySplit, rotationStartFor, workOn } from '../../shared/schedule.ts';
+import { currentRotationIndex, describeSchedule, hasWeekdaySplit, rotationStartFor, scheduledOn, workOn } from '../../shared/schedule.ts';
 import { api } from '../api.ts';
 import { useApp } from '../context.tsx';
 import { Avatar, Empty, Icon, Modal } from '../components/ui.tsx';
@@ -177,12 +178,14 @@ function EmployeeModal({ value, onClose }: { value: Partial<Employee>; onClose: 
   });
   const set = <K extends keyof typeof form>(k: K, v: (typeof form)[K]) => setForm((f) => ({ ...f, [k]: v }));
   const [schedule, setSchedule] = useState<EmployeeSchedule | null>(value.schedule ?? null);
+  const [overrides, setOverrides] = useState<Record<string, Shift | null>>(value.shiftOverrides ?? {});
   const save = async () => {
     const body = {
       ...form,
       storeId: form.storeId || null,
       annualDays: form.annualDays === '' ? null : Number(form.annualDays),
       schedule,
+      shiftOverrides: overrides,
     };
     const ok = await run(
       () => (value.id ? api('PUT', `/api/employees/${value.id}`, body) : api('POST', '/api/employees', body)),
@@ -240,7 +243,7 @@ function EmployeeModal({ value, onClose }: { value: Partial<Employee>; onClose: 
         />
         <small className="muted">Déjalo vacío para usar el valor de su horario o el general de Ajustes.</small>
       </label>
-      <ScheduleField value={schedule} onChange={setSchedule} />
+      <ScheduleField value={schedule} onChange={setSchedule} overrides={overrides} onOverrides={setOverrides} />
       <div className="field">
         <span>Color</span>
         <div className="color-picker">
@@ -297,8 +300,21 @@ function StoreModal({ value, onClose }: { value: Partial<Store>; onClose: () => 
   );
 }
 
-/** Horario de una persona: sin horario, fijo o rotativo, con una vista previa de las próximas semanas. */
-function ScheduleField({ value, onChange }: { value: EmployeeSchedule | null; onChange: (s: EmployeeSchedule | null) => void }) {
+/**
+ * Horario de una persona: sin horario, fijo o rotativo, con una vista previa de esta semana y la
+ * próxima. Cada día de la vista previa se puede cambiar a mano haciendo clic.
+ */
+function ScheduleField({
+  value,
+  onChange,
+  overrides,
+  onOverrides,
+}: {
+  value: EmployeeSchedule | null;
+  onChange: (s: EmployeeSchedule | null) => void;
+  overrides: Record<string, Shift | null>;
+  onOverrides: (o: Record<string, Shift | null>) => void;
+}) {
   const { state } = useApp();
   const groups = state.settings.scheduleGroups;
   const rules = useMemo(() => dayRules(state.settings), [state.settings]);
@@ -332,12 +348,21 @@ function ScheduleField({ value, onChange }: { value: EmployeeSchedule | null; on
   }
 
   const week = mondayOf(today);
-  const preview = value
-    ? [0, 1, 2, 3].map((w) => {
-        const days = Array.from({ length: 7 }, (_, i) => addDays(week, w * 7 + i));
-        return { label: w === 0 ? 'Esta semana' : w === 1 ? 'La próxima' : `En ${w} semanas`, days };
-      })
-    : [];
+  const preview = [0, 1].map((w) => ({
+    label: w === 0 ? 'Esta semana' : 'La próxima',
+    days: Array.from({ length: 7 }, (_, i) => addDays(week, w * 7 + i)),
+  }));
+  // Al hacer clic en un día se pasa al siguiente turno; al dar la vuelta vuelve a lo que marca el horario.
+  const cycleDay = (day: string) => {
+    const base = scheduledOn({ schedule: value }, day, rules);
+    const now = day in overrides ? overrides[day] : base;
+    const seq: (Shift | 'dia' | null)[] = base === 'dia' ? ['dia', 'M', 'T', 'P', null] : ['M', 'T', 'P', null];
+    const next = seq[(seq.indexOf(now) + 1) % seq.length];
+    const { [day]: _, ...rest } = overrides;
+    onOverrides(next === base || next === 'dia' ? rest : { ...rest, [day]: next });
+  };
+  const previewDays = preview.flatMap((w) => w.days);
+  const changedHere = previewDays.filter((d) => d in overrides);
 
   return (
     <div className="field">
@@ -423,8 +448,7 @@ function ScheduleField({ value, onChange }: { value: EmployeeSchedule | null; on
         </label>
       )}
 
-      {preview.length > 0 && (
-        <div className="schedule-preview">
+      <div className="schedule-preview">
           <div className="sp-row sp-head">
             <span />
             {[1, 2, 3, 4, 5, 6, 0].map((d) => (
@@ -435,18 +459,46 @@ function ScheduleField({ value, onChange }: { value: EmployeeSchedule | null; on
             <div key={w.label} className="sp-row">
               <span className="muted small">{w.label}</span>
               {w.days.map((d) => {
-                const s = workOn({ schedule: value }, d, rules);
-                const shift = s === 'dia' ? null : s;
+                const date = `${d.slice(8)}/${d.slice(5, 7)}`;
+                if (rules.holidays.has(d)) {
+                  return (
+                    <span key={d} className="shift-tag sp-holiday" title={`${date}: festivo`}>
+                      F
+                    </span>
+                  );
+                }
+                const s = workOn({ schedule: value, shiftOverrides: overrides }, d, rules);
+                const changed = d in overrides;
+                const label = s === 'dia' ? '✓' : s ?? '—';
+                const name = s === 'dia' ? 'día completo' : s ? SHIFTS[s].label.toLowerCase() : 'libre';
                 return (
-                  <span key={d} className={`shift-tag ${shift ? `shift-${shift}` : ''}`} title={`${d.slice(8)}/${d.slice(5, 7)}`}>
-                    {shift ?? '—'}
-                  </span>
+                  <button
+                    type="button"
+                    key={d}
+                    className={`shift-tag sp-day ${s && s !== 'dia' ? `shift-${s}` : ''} ${changed ? 'changed' : ''}`}
+                    title={`${date}: ${name}${changed ? ' (cambiado a mano)' : ''}. Clic para cambiarlo.`}
+                    aria-label={`${WEEKDAYS_ES[weekday(d)]} ${date}: ${name}`}
+                    onClick={() => cycleDay(d)}
+                  >
+                    {label}
+                  </button>
                 );
               })}
             </div>
           ))}
+        <div className="inline-row">
+          <span className="muted small">Haz clic en un día para cambiarlo solo ese día (mañana, tarde, partido o libre).</span>
+          {changedHere.length > 0 && (
+            <button
+              type="button"
+              className="small-btn"
+              onClick={() => onOverrides(Object.fromEntries(Object.entries(overrides).filter(([d]) => !previewDays.includes(d))))}
+            >
+              Deshacer cambios ({changedHere.length})
+            </button>
+          )}
         </div>
-      )}
+      </div>
     </div>
   );
 }

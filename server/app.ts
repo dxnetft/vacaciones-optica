@@ -100,7 +100,20 @@ export function createApp(db: Store) {
         : int(body.annualDays, 'días al año', 0, 366),
       active: body.active !== false,
       schedule: parseSchedule(body.schedule),
+      shiftOverrides: parseOverrides(body.shiftOverrides),
     };
+  };
+
+  const parseOverrides = (v: unknown): Record<string, Shift | null> | undefined => {
+    if (!v || typeof v !== 'object') return undefined;
+    const entries = Object.entries(v as Record<string, unknown>);
+    if (entries.length > 2000) fail('Demasiados cambios manuales de horario.');
+    const out: Record<string, Shift | null> = {};
+    for (const [day, shift] of entries) {
+      if (shift !== null && !SHIFT_KEYS.includes(shift as Shift)) fail('Turno no válido en los cambios de horario.');
+      out[date(day, 'día del cambio de horario')] = shift as Shift | null;
+    }
+    return Object.keys(out).length ? out : undefined;
   };
 
   const parseSchedule = (v: unknown): EmployeeSchedule | null => {
