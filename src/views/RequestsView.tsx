@@ -115,7 +115,7 @@ export function RequestsView() {
         <>
           <h2 className="section-title">Decididas recientemente</h2>
           <div className="table-card">
-            <table className="table">
+            <table className="table decided-table">
               <tbody>
                 {decided.map((a) => {
                   const e = emp(a.employeeId);

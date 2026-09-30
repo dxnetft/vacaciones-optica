@@ -1088,6 +1088,52 @@ textarea {
 .table tr.inactive td {
   opacity: 0.55;
 }
+/* En pantallas estrechas, cada solicitud decidida pasa a ser una fila de dos líneas. */
+@media (max-width: 900px) {
+  .decided-table,
+  .decided-table tbody {
+    display: block;
+  }
+  .decided-table tr {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 4px 10px;
+    align-items: center;
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border);
+  }
+  .decided-table tr:last-child {
+    border-bottom: none;
+  }
+  .decided-table td {
+    padding: 0;
+    border: none;
+  }
+  .decided-table tr.clickable:hover {
+    background: var(--surface-2);
+  }
+  .decided-table tr.clickable:hover td {
+    background: none;
+  }
+  .decided-table td:nth-child(1) {
+    font-weight: 600;
+  }
+  .decided-table td:nth-child(2) {
+    grid-row: 2;
+    color: var(--muted);
+    font-size: 13px;
+  }
+  .decided-table td:nth-child(3) {
+    grid-column: 2;
+    grid-row: 1;
+    justify-self: end;
+  }
+  .decided-table td:nth-child(4) {
+    grid-column: 2;
+    grid-row: 2;
+    justify-self: end;
+  }
+}
 .person-cell {
   display: flex;
   align-items: center;
