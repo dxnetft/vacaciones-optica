@@ -8,7 +8,6 @@ import { RequestsView } from './views/RequestsView.tsx';
 import { TeamView } from './views/TeamView.tsx';
 import { ImportView } from './views/ImportView.tsx';
 import { SettingsView } from './views/SettingsView.tsx';
-import logoUrl from './assets/logo-optica-universitaria.jpg';
 
 type Tab = 'calendario' | 'anual' | 'solicitudes' | 'equipo' | 'importar' | 'ajustes';
 
@@ -53,8 +52,17 @@ export function App() {
     <div className="app">
       <aside className="sidebar">
         <div className="brand">
-          <img className="brand-logo" src={logoUrl} alt={state.settings.companyName} />
-          <span>Vacaciones del equipo</span>
+          <span className="brand-logo" aria-hidden>
+            <svg viewBox="0 0 64 64" width="22" height="22">
+              <circle cx="21" cy="34" r="10" fill="none" stroke="currentColor" strokeWidth="5" />
+              <circle cx="43" cy="34" r="10" fill="none" stroke="currentColor" strokeWidth="5" />
+              <path d="M31 33h2" stroke="currentColor" strokeWidth="5" strokeLinecap="round" />
+            </svg>
+          </span>
+          <div>
+            <b>{state.settings.companyName}</b>
+            <span>Vacaciones del equipo</span>
+          </div>
         </div>
         <nav className="nav">
           {TABS.map((t) => (
